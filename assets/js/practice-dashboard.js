@@ -33,6 +33,7 @@ const practiceCategoryList = document.getElementById('practiceCategoryList');
 const practiceCardsGrid = document.getElementById('practiceCardsGrid');
 const practiceContentTitle = document.getElementById('practiceContentTitle');
 const practiceContentCount = document.getElementById('practiceContentCount');
+const practiceContentHeader = document.querySelector('.practice-content-header');
 
 const practiceTabButtons = document.querySelectorAll('[data-practice-type]');
 
@@ -324,6 +325,26 @@ const vocabularyCategoryLabels = {
   actions: 'Actions & Verbs'
 };
 
+const practiceCategoryThemeMap = {
+  urgent: 'board-theme-urgent',
+  basic: 'board-theme-basic',
+  feelings: 'board-theme-feelings',
+  physical: 'board-theme-physical',
+  daily: 'board-theme-daily',
+  social: 'board-theme-social',
+  rehab: 'board-theme-rehab',
+  activities: 'board-theme-activities',
+  people: 'board-theme-people',
+  food: 'board-theme-food',
+  places: 'board-theme-places',
+  body: 'board-theme-body',
+  actions: 'board-theme-actions'
+};
+
+function getCategoryThemeClass(category) {
+  return practiceCategoryThemeMap[category] || 'board-theme-default';
+}
+
 function getCurrentData() {
   return currentType === 'phrases' ? getPatientPhrases() : getPatientVocabulary();
 }
@@ -406,7 +427,7 @@ function renderCategories() {
   practiceCategoryList.innerHTML = categoryKeys.map((key) => `
     <button
       type="button"
-      class="board-category-btn ${key === currentCategory ? 'active-board-category' : ''}"
+      class="board-category-btn ${getCategoryThemeClass(key)} ${key === currentCategory ? 'active-board-category' : ''}"
       data-category="${key}"
     >
       <span>${labels[key]}</span>
@@ -434,6 +455,7 @@ function renderPracticeCards() {
     ? patientPracticeClicks.phrases
     : patientPracticeClicks.vocabulary;
   const resolvedLanguage = getResolvedPatientLanguage();
+  const themeClass = getCategoryThemeClass(currentCategory);
 
   if (practiceContentTitle) {
     practiceContentTitle.textContent = labels[currentCategory];
@@ -441,6 +463,11 @@ function renderPracticeCards() {
 
   if (practiceContentCount) {
     practiceContentCount.textContent = `${items.length} cards`;
+  }
+
+  if (practiceContentHeader) {
+    practiceContentHeader.className = 'practice-content-header';
+    practiceContentHeader.classList.add(themeClass);
   }
 
   practiceCardsGrid.innerHTML = items.length
@@ -451,14 +478,14 @@ function renderPracticeCards() {
         return `
           <button
             type="button"
-            class="practice-card"
+            class="phrases-vocabulary-card ${themeClass}"
             data-item-id="${item.id}"
             data-item-text="${displayText}"
           >
-            <div class="practice-card-image">
+            <div class="phrases-vocabulary-card-image">
               <img src="${item.image || DEFAULT_IMAGE}" alt="${displayText}" />
             </div>
-            <div class="practice-card-text">
+            <div class="phrases-vocabulary-card-text">
               <span>${displayText}</span>
               <small>Practiced ${practiceCount} time${practiceCount === 1 ? '' : 's'}</small>
             </div>
