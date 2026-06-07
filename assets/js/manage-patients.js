@@ -8,7 +8,6 @@ const patientFullName = document.getElementById('patient-fullname');
 const patientIdInput = document.getElementById('patient-id');
 const patientAgeInput = document.getElementById('patient-age');
 const patientGenderInput = document.getElementById('patient-gender');
-const patientStatusInput = document.getElementById('patient-status');
 const patientDobInput = document.getElementById('patient-dob');
 
 const patientsGrid = document.getElementById('patientsGrid');
@@ -141,10 +140,6 @@ if (openAddPatientModal && addPatientModal) {
 
     if (patientAgeInput) {
       patientAgeInput.value = '';
-    }
-
-    if (patientStatusInput) {
-      patientStatusInput.value = 'Inactive';
     }
 
     addPatientModal.classList.add('active');
