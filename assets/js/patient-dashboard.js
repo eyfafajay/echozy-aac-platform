@@ -55,6 +55,11 @@ const vocabularyProgressCircle = document.getElementById('vocabularyProgressCirc
 const phrasesProgressPercent = document.getElementById('phrasesProgressPercent');
 const vocabularyProgressPercent = document.getElementById('vocabularyProgressPercent');
 
+const successfulPhrasesCount = document.getElementById('successfulPhrasesCount');
+const unsuccessfulPhrasesCount = document.getElementById('unsuccessfulPhrasesCount');
+const successfulVocabularyCount = document.getElementById('successfulVocabularyCount');
+const unsuccessfulVocabularyCount = document.getElementById('unsuccessfulVocabularyCount');
+
 const frequentlyUsedPhrasesTableBody = document.getElementById('frequentlyUsedPhrasesTableBody');
 
 const sharedUserQuery = new URLSearchParams({
@@ -106,8 +111,8 @@ function getStoredVocabulary() {
   return JSON.parse(localStorage.getItem('echozyVocabulary') || '{}');
 }
 
-function getStoredPractice() {
-  return JSON.parse(localStorage.getItem('echozyPracticeProgress') || '{}');
+function getStoredPracticeResults() {
+  return JSON.parse(localStorage.getItem('echozyPracticeResults') || '{}');
 }
 
 function getStoredUsageCounts() {
@@ -207,6 +212,12 @@ function getAllIdsByPatient(data, patientId) {
     .flat()
     .map((item) => item.id)
     .filter(Boolean);
+}
+
+function countResultItems(resultsObject, validIds, targetStatus) {
+  return Object.entries(resultsObject || {}).filter(([itemId, status]) => {
+    return validIds.includes(itemId) && status === targetStatus;
+  }).length;
 }
 
 function formatSessionDateTime(isoString) {
@@ -311,6 +322,10 @@ function showPatientNotFound() {
 
   if (phrasesProgressPercent) phrasesProgressPercent.textContent = '0%';
   if (vocabularyProgressPercent) vocabularyProgressPercent.textContent = '0%';
+  if (successfulPhrasesCount) successfulPhrasesCount.textContent = '0';
+  if (unsuccessfulPhrasesCount) unsuccessfulPhrasesCount.textContent = '0';
+  if (successfulVocabularyCount) successfulVocabularyCount.textContent = '0';
+  if (unsuccessfulVocabularyCount) unsuccessfulVocabularyCount.textContent = '0';
   updateProgressCircle(phrasesProgressCircle, 0);
   updateProgressCircle(vocabularyProgressCircle, 0);
 
@@ -401,11 +416,11 @@ function renderPatientData(patient) {
 
   const allPhrases = getStoredPhrases();
   const allVocabulary = getStoredVocabulary();
-  const allPractice = getStoredPractice();
+  const allPracticeResults = getStoredPracticeResults();
   const allUsageCounts = getStoredUsageCounts();
   const allSessionLogs = getStoredSessionLogs();
 
-  const patientPractice = allPractice[patient.id] || { phrases: [], vocabulary: [] };
+  const patientPracticeResults = allPracticeResults[patient.id] || { phrases: {}, vocabulary: {} };
   const patientUsageCounts = allUsageCounts[patient.id] || { phrases: {}, vocabulary: {} };
   const patientSessionLogs = allSessionLogs[patient.id] || [];
 
@@ -431,15 +446,36 @@ function renderPatientData(patient) {
   const phraseIds = getAllIdsByPatient(allPhrases, patient.id);
   const vocabularyIds = getAllIdsByPatient(allVocabulary, patient.id);
 
-  const practicedPhraseTotal = patientPractice.phrases.filter((id) => phraseIds.includes(id)).length;
-  const practicedVocabularyTotal = patientPractice.vocabulary.filter((id) => vocabularyIds.includes(id)).length;
+  const successfulPhraseTotal = countResultItems(
+    patientPracticeResults.phrases,
+    phraseIds,
+    'success'
+  );
+
+  const unsuccessfulPhraseTotal = countResultItems(
+    patientPracticeResults.phrases,
+    phraseIds,
+    'unsuccessful'
+  );
+
+  const successfulVocabularyTotal = countResultItems(
+    patientPracticeResults.vocabulary,
+    vocabularyIds,
+    'success'
+  );
+
+  const unsuccessfulVocabularyTotal = countResultItems(
+    patientPracticeResults.vocabulary,
+    vocabularyIds,
+    'unsuccessful'
+  );
 
   const phraseProgress = phraseIds.length
-    ? Math.round((practicedPhraseTotal / phraseIds.length) * 100)
+    ? Math.round((successfulPhraseTotal / phraseIds.length) * 100)
     : 0;
 
   const vocabularyProgress = vocabularyIds.length
-    ? Math.round((practicedVocabularyTotal / vocabularyIds.length) * 100)
+    ? Math.round((successfulVocabularyTotal / vocabularyIds.length) * 100)
     : 0;
 
   if (phrasesProgressPercent) {
@@ -451,6 +487,22 @@ function renderPatientData(patient) {
     vocabularyProgressPercent.textContent = `${vocabularyProgress}%`;
   }
   updateProgressCircle(vocabularyProgressCircle, vocabularyProgress);
+
+  if (successfulPhrasesCount) {
+    successfulPhrasesCount.textContent = successfulPhraseTotal;
+  }
+
+  if (unsuccessfulPhrasesCount) {
+    unsuccessfulPhrasesCount.textContent = unsuccessfulPhraseTotal;
+  }
+
+  if (successfulVocabularyCount) {
+    successfulVocabularyCount.textContent = successfulVocabularyTotal;
+  }
+
+  if (unsuccessfulVocabularyCount) {
+    unsuccessfulVocabularyCount.textContent = unsuccessfulVocabularyTotal;
+  }
 
   const flattenedPhraseItems = flattenPatientItemsWithCategory(allPhrases, patient.id);
   const flattenedVocabularyItems = flattenPatientItemsWithCategory(allVocabulary, patient.id);
