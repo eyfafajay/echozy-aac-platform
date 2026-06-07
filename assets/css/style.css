@@ -1064,6 +1064,14 @@ main {
   transform: translateY(-1px);
 }
 
+.progress-legend p:first-child strong {
+  color: #1c8c56;
+}
+
+.progress-legend p:last-child strong {
+  color: #c24848;
+}
+
 .status-badge {
   display: inline-block;
   padding: 7px 12px;
