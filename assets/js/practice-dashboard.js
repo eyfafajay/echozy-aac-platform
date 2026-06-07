@@ -223,12 +223,47 @@ function getStoredVocabulary() {
   return JSON.parse(localStorage.getItem('echozyVocabulary') || '{}');
 }
 
-function getStoredPractice() {
-  return JSON.parse(localStorage.getItem('echozyPracticeProgress') || '{}');
+function getStoredPracticeClickCounts() {
+  return JSON.parse(localStorage.getItem('echozyPracticeClickCounts') || '{}');
 }
 
-function saveStoredPractice(data) {
-  localStorage.setItem('echozyPracticeProgress', JSON.stringify(data));
+function saveStoredPracticeClickCounts(data) {
+  localStorage.setItem('echozyPracticeClickCounts', JSON.stringify(data));
+}
+
+function getPatientPracticeClickCounts() {
+  const allPracticeClicks = getStoredPracticeClickCounts();
+
+  if (!allPracticeClicks[patientId]) {
+    allPracticeClicks[patientId] = {
+      phrases: {},
+      vocabulary: {}
+    };
+    saveStoredPracticeClickCounts(allPracticeClicks);
+  }
+
+  return allPracticeClicks[patientId];
+}
+
+function recordPracticeCardClick(itemId) {
+  const allPracticeClicks = getStoredPracticeClickCounts();
+  const patientPracticeClicks = getPatientPracticeClickCounts();
+  const targetClicks = currentType === 'phrases'
+    ? patientPracticeClicks.phrases
+    : patientPracticeClicks.vocabulary;
+
+  if (!itemId) {
+    return;
+  }
+
+  if (!targetClicks[itemId]) {
+    targetClicks[itemId] = 0;
+  }
+
+  targetClicks[itemId] += 1;
+
+  allPracticeClicks[patientId] = patientPracticeClicks;
+  saveStoredPracticeClickCounts(allPracticeClicks);
 }
 
 function getStoredSessionLogs() {
@@ -257,20 +292,6 @@ function recordQuitSession() {
 
   allSessionLogs[patientId] = patientLogs;
   saveStoredSessionLogs(allSessionLogs);
-}
-
-function getPatientPractice() {
-  const allPractice = getStoredPractice();
-
-  if (!allPractice[patientId]) {
-    allPractice[patientId] = {
-      phrases: [],
-      vocabulary: []
-    };
-    saveStoredPractice(allPractice);
-  }
-
-  return allPractice[patientId];
 }
 
 function getPatientPhrases() {
@@ -321,8 +342,18 @@ function getAllIds(data) {
   return Object.values(data).flat().map((item) => item.id).filter(Boolean);
 }
 
+function sumClickCounts(clicksObject) {
+  return Object.values(clicksObject || {}).reduce((total, count) => total + count, 0);
+}
+
+function countPracticedItems(clicksObject, validIds) {
+  return Object.entries(clicksObject || {}).filter(([itemId, count]) => {
+    return validIds.includes(itemId) && count > 0;
+  }).length;
+}
+
 function updatePracticeSummary() {
-  const patientPractice = getPatientPractice();
+  const patientPracticeClicks = getPatientPracticeClickCounts();
   const phraseData = getPatientPhrases();
   const vocabularyData = getPatientVocabulary();
 
@@ -332,11 +363,19 @@ function updatePracticeSummary() {
   const phraseIds = getAllIds(phraseData);
   const vocabularyIds = getAllIds(vocabularyData);
 
-  const practicedPhraseTotal = patientPractice.phrases.filter((id) => phraseIds.includes(id)).length;
-  const practicedVocabularyTotal = patientPractice.vocabulary.filter((id) => vocabularyIds.includes(id)).length;
+  const practicedPhraseItems = countPracticedItems(patientPracticeClicks.phrases, phraseIds);
+  const practicedVocabularyItems = countPracticedItems(patientPracticeClicks.vocabulary, vocabularyIds);
 
-  const phrasePercent = totalPhraseItems ? Math.round((practicedPhraseTotal / totalPhraseItems) * 100) : 0;
-  const vocabularyPercent = totalVocabularyItems ? Math.round((practicedVocabularyTotal / totalVocabularyItems) * 100) : 0;
+  const totalPhrasePracticeClicks = sumClickCounts(patientPracticeClicks.phrases);
+  const totalVocabularyPracticeClicks = sumClickCounts(patientPracticeClicks.vocabulary);
+
+  const phrasePercent = totalPhraseItems
+    ? Math.round((practicedPhraseItems / totalPhraseItems) * 100)
+    : 0;
+
+  const vocabularyPercent = totalVocabularyItems
+    ? Math.round((practicedVocabularyItems / totalVocabularyItems) * 100)
+    : 0;
 
   if (practicedPhrasesPercent) {
     practicedPhrasesPercent.textContent = `${phrasePercent}%`;
@@ -347,11 +386,11 @@ function updatePracticeSummary() {
   }
 
   if (practicedPhrasesCount) {
-    practicedPhrasesCount.textContent = practicedPhraseTotal;
+    practicedPhrasesCount.textContent = totalPhrasePracticeClicks;
   }
 
   if (practicedVocabularyCount) {
-    practicedVocabularyCount.textContent = practicedVocabularyTotal;
+    practicedVocabularyCount.textContent = totalVocabularyPracticeClicks;
   }
 }
 
@@ -385,33 +424,15 @@ function renderCategories() {
   });
 }
 
-function togglePracticeItem(itemId) {
-  const allPractice = getStoredPractice();
-  const patientPractice = getPatientPractice();
-  const targetList = currentType === 'phrases' ? patientPractice.phrases : patientPractice.vocabulary;
-
-  const existingIndex = targetList.indexOf(itemId);
-
-  if (existingIndex >= 0) {
-    targetList.splice(existingIndex, 1);
-  } else {
-    targetList.push(itemId);
-  }
-
-  allPractice[patientId] = patientPractice;
-  saveStoredPractice(allPractice);
-
-  updatePracticeSummary();
-  renderPracticeCards();
-}
-
 function renderPracticeCards() {
   const labels = getCurrentLabels();
   const data = getCurrentData();
-  const patientPractice = getPatientPractice();
+  const patientPracticeClicks = getPatientPracticeClickCounts();
 
   const items = data[currentCategory] || [];
-  const practicedIds = currentType === 'phrases' ? patientPractice.phrases : patientPractice.vocabulary;
+  const practiceClicks = currentType === 'phrases'
+    ? patientPracticeClicks.phrases
+    : patientPracticeClicks.vocabulary;
   const resolvedLanguage = getResolvedPatientLanguage();
 
   if (practiceContentTitle) {
@@ -424,13 +445,13 @@ function renderPracticeCards() {
 
   practiceCardsGrid.innerHTML = items.length
     ? items.map((item) => {
-        const isPracticed = practicedIds.includes(item.id);
+        const practiceCount = practiceClicks[item.id] || 0;
         const displayText = getTextByLanguage(item, resolvedLanguage);
 
         return `
           <button
             type="button"
-            class="practice-card ${isPracticed ? 'practiced-card' : ''}"
+            class="practice-card"
             data-item-id="${item.id}"
             data-item-text="${displayText}"
           >
@@ -439,7 +460,7 @@ function renderPracticeCards() {
             </div>
             <div class="practice-card-text">
               <span>${displayText}</span>
-              <small>${isPracticed ? 'Practiced' : 'Not practiced yet'}</small>
+              <small>Practiced ${practiceCount} time${practiceCount === 1 ? '' : 's'}</small>
             </div>
           </button>
         `;
@@ -452,7 +473,9 @@ function renderPracticeCards() {
       const itemId = card.dataset.itemId;
       const itemText = card.dataset.itemText;
 
-      togglePracticeItem(itemId);
+      recordPracticeCardClick(itemId);
+      updatePracticeSummary();
+      renderPracticeCards();
       speakCardWithOpenAITTS(itemText);
     });
   });
