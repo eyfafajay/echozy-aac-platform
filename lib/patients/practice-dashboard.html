@@ -49,25 +49,39 @@
       </div>
     </section>
 
-    <section class="practice-summary-grid">
-      <div class="practice-summary-card">
-        <span>Practiced Phrases</span>
-        <strong id="practicedPhrasesPercent">0%</strong>
+    <section class="practice-summary-grid practice-progress-grid">
+      <div class="practice-summary-card practice-progress-card">
+        <div class="practice-progress-top">
+          <span>Phrases Progress</span>
+          <strong id="phrasesProgressPercent">0%</strong>
+        </div>
+
+        <div class="practice-progress-bar">
+          <div class="practice-progress-success" id="phrasesProgressSuccessBar"></div>
+          <div class="practice-progress-unsuccessful" id="phrasesProgressUnsuccessfulBar"></div>
+        </div>
+
+        <div class="practice-progress-legend-row">
+          <p><span class="legend-dot legend-green"></span> Successful: <strong id="phrasesSuccessCount">0</strong></p>
+          <p><span class="legend-dot legend-red"></span> Not Successful: <strong id="phrasesUnsuccessfulCount">0</strong></p>
+        </div>
       </div>
 
-      <div class="practice-summary-card">
-        <span>Practiced Vocabulary</span>
-        <strong id="practicedVocabularyPercent">0%</strong>
-      </div>
+      <div class="practice-summary-card practice-progress-card">
+        <div class="practice-progress-top">
+          <span>Vocabulary Progress</span>
+          <strong id="vocabularyProgressPercent">0%</strong>
+        </div>
 
-      <div class="practice-summary-card">
-        <span>Total Practiced Phrase Cards</span>
-        <strong id="practicedPhrasesCount">0</strong>
-      </div>
+        <div class="practice-progress-bar">
+          <div class="practice-progress-success" id="vocabularyProgressSuccessBar"></div>
+          <div class="practice-progress-unsuccessful" id="vocabularyProgressUnsuccessfulBar"></div>
+        </div>
 
-      <div class="practice-summary-card">
-        <span>Total Practiced Vocabulary Cards</span>
-        <strong id="practicedVocabularyCount">0</strong>
+        <div class="practice-progress-legend-row">
+          <p><span class="legend-dot legend-green"></span> Successful: <strong id="vocabularySuccessCount">0</strong></p>
+          <p><span class="legend-dot legend-red"></span> Not Successful: <strong id="vocabularyUnsuccessfulCount">0</strong></p>
+        </div>
       </div>
     </section>
 
