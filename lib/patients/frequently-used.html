@@ -27,8 +27,8 @@
     </div>
   </header>
 
-  <main class="frequently-used-page">
-    <section class="frequently-used-header">
+  <main class="phrases-vocabulary-page">
+    <section class="phrases-vocabulary-header">
       <div>
         <p class="dashboard-label">FREQUENTLY USED</p>
         <h1 id="frequentlyUsedHeading">Frequently Used for Selected Patient</h1>
@@ -37,7 +37,7 @@
         </p>
       </div>
 
-      <div class="frequently-used-header-actions">
+      <div class="phrases-vocabulary-header-actions">
         <span class="board-patient-status active-badge" id="frequentlyUsedPatientStatus">Active</span>
 
         <div class="card-size-control" aria-label="Card size control">
@@ -49,7 +49,7 @@
       </div>
     </section>
 
-    <section class="frequently-used-summary-grid">
+    <section class="phrases-vocabulary-top-summary">
       <div class="practice-summary-card">
         <span>Total Phrase Clicks</span>
         <strong id="frequentlyUsedPhraseClicks">0</strong>
@@ -71,25 +71,28 @@
       </div>
     </section>
 
-    <section class="phrases-vocabulary-tabs frequently-used-tabs">
-      <button type="button" class="board-tab-btn active-board-tab" data-frequent-type="phrases">
-        Phrases
-      </button>
-      <button type="button" class="board-tab-btn" data-frequent-type="vocabulary">
-        Vocabulary
-      </button>
+    <section class="practice-tab-section">
+      <div class="board-tab-group">
+        <button type="button" class="board-tab-btn active-board-tab" data-frequent-type="phrases">Phrases</button>
+        <button type="button" class="board-tab-btn" data-frequent-type="vocabulary">Vocabulary</button>
+      </div>
     </section>
 
-    <section class="frequently-used-layout">
-      <aside class="frequently-used-categories-panel" id="frequentlyUsedCategoryList"></aside>
+    <section class="phrases-vocabulary-layout">
+      <aside class="practice-sidebar">
+        <div class="board-side-card">
+          <h2>Categories</h2>
+          <div class="board-category-list" id="frequentlyUsedCategoryList"></div>
+        </div>
+      </aside>
 
-      <section class="frequently-used-content-panel">
-        <div class="practice-content-header" id="frequentlyUsedContentHeader">
-          <h2 id="frequentlyUsedContentTitle">Frequently Used Phrases</h2>
+      <section class="phrases-vocabulary-content-panel">
+        <div class="practice-content-header">
+          <h2 id="frequentlyUsedContentTitle">Urgent Needs</h2>
           <p id="frequentlyUsedContentCount">0 cards</p>
         </div>
 
-        <div class="frequently-used-cards-grid" id="frequentlyUsedCardsGrid"></div>
+        <div class="phrases-vocabulary-cards-grid" id="frequentlyUsedCardsGrid"></div>
       </section>
     </section>
   </main>
