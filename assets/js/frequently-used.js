@@ -253,19 +253,19 @@ const vocabularyCategoryLabels = {
 };
 
 const frequentCategoryThemeMap = {
-  urgent: 'frequent-theme-urgent',
-  basic: 'frequent-theme-basic',
-  feelings: 'frequent-theme-feelings',
-  physical: 'frequent-theme-physical',
-  daily: 'frequent-theme-daily',
-  social: 'frequent-theme-social',
-  rehab: 'frequent-theme-rehab',
-  activities: 'frequent-theme-activities',
-  people: 'frequent-theme-people',
-  food: 'frequent-theme-food',
-  places: 'frequent-theme-places',
-  body: 'frequent-theme-body',
-  actions: 'frequent-theme-actions'
+  urgent: 'board-theme-urgent',
+  basic: 'board-theme-basic',
+  feelings: 'board-theme-feelings',
+  physical: 'board-theme-physical',
+  daily: 'board-theme-daily',
+  social: 'board-theme-social',
+  rehab: 'board-theme-rehab',
+  activities: 'board-theme-activities',
+  people: 'board-theme-people',
+  food: 'board-theme-food',
+  places: 'board-theme-places',
+  body: 'board-theme-body',
+  actions: 'board-theme-actions'
 };
 
 function getCurrentData() {
@@ -399,18 +399,18 @@ function recordUsage(type, itemId) {
 function renderFrequentlyUsedCards() {
   const labels = getCurrentLabels();
   const data = getCurrentData();
-  const usageData = getPatientUsageCounts();
+  const patientUsage = getPatientUsageCounts();
   const items = Array.isArray(data[currentCategory]) ? data[currentCategory] : [];
-  const resolvedLanguage = getResolvedPatientLanguage();
   const themeClass = getCategoryThemeClass(currentCategory);
+  const resolvedLanguage = getResolvedPatientLanguage();
 
   const filteredItems = items
     .map((item) => ({
       ...item,
       clickCount:
         currentType === 'phrases'
-          ? (usageData.phrases[item.id] || 0)
-          : (usageData.vocabulary[item.id] || 0)
+          ? (patientUsage.phrases[item.id] || 0)
+          : (patientUsage.vocabulary[item.id] || 0)
     }))
     .filter((item) => item.clickCount > 0)
     .sort((a, b) => b.clickCount - a.clickCount);
@@ -423,11 +423,6 @@ function renderFrequentlyUsedCards() {
     frequentlyUsedContentCount.textContent = `${filteredItems.length} cards`;
   }
 
-  if (frequentlyUsedContentHeader) {
-    frequentlyUsedContentHeader.className = 'practice-content-header';
-    frequentlyUsedContentHeader.classList.add(themeClass);
-  }
-
   frequentlyUsedCardsGrid.innerHTML = filteredItems.length
     ? filteredItems.map((item) => {
         const displayText = getTextByLanguage(item, resolvedLanguage);
@@ -435,13 +430,13 @@ function renderFrequentlyUsedCards() {
         return `
           <button
             type="button"
-            class="frequently-used-card ${themeClass}"
+            class="phrases-vocabulary-card ${themeClass}"
             data-item-id="${item.id}"
           >
-            <div class="frequently-used-card-image">
+            <div class="phrases-vocabulary-card-image">
               <img src="${item.image || DEFAULT_IMAGE}" alt="${displayText}" />
             </div>
-            <div class="frequently-used-card-text">
+            <div class="phrases-vocabulary-card-text">
               <span>${displayText}</span>
               <small>Clicked ${item.clickCount} time${item.clickCount === 1 ? '' : 's'}</small>
             </div>
