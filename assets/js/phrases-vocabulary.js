@@ -49,6 +49,21 @@ function getStoredPatients() {
   return JSON.parse(localStorage.getItem('echozyPatients') || '{}');
 }
 
+function saveStoredPatients(patients) {
+  localStorage.setItem('echozyPatients', JSON.stringify(patients));
+}
+
+function updatePatientStatusInStorage(patientId, nextStatus) {
+  const patients = getStoredPatients();
+
+  if (!patients[patientId]) {
+    return;
+  }
+
+  patients[patientId].status = nextStatus;
+  saveStoredPatients(patients);
+}
+
 function getResolvedPatientLanguage() {
   const storedPatients = getStoredPatients();
   return patientLanguage || storedPatients[patientId]?.preferredLanguage || 'English';
@@ -127,6 +142,7 @@ if (backToPatientDashboardBtn) {
 
   backToPatientDashboardBtn.addEventListener('click', () => {
     recordQuitSession();
+    updatePatientStatusInStorage(patientId, 'Inactive');
   });
 }
 
