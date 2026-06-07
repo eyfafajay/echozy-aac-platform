@@ -430,6 +430,75 @@ main {
   object-fit: cover;
 }
 
+.about-story-section {
+  margin-bottom: clamp(28px, 5vw, 42px);
+}
+
+.about-story-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(244, 250, 255, 0.96));
+  border-radius: clamp(18px, 2vw, 26px);
+  padding: clamp(22px, 3vw, 34px);
+  box-shadow: 0 10px 24px rgba(31, 78, 140, 0.1);
+  border: 1px solid rgba(31, 78, 140, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.about-story-card::before {
+  content: "";
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, rgba(194, 222, 245, 0.55) 0%, rgba(194, 222, 245, 0) 70%);
+  pointer-events: none;
+}
+
+.about-story-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #edf6fd;
+  color: #1f4e8c;
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.about-story-content {
+  max-width: 980px;
+}
+
+.about-story-text h2 {
+  font-family: 'Montserrat', sans-serif;
+  font-size: clamp(26px, 2.6vw, 38px);
+  color: #1f4e8c;
+  margin-bottom: 14px;
+  line-height: 1.18;
+}
+
+.about-story-text p {
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(16px, 1.35vw, 18px);
+  line-height: 1.85;
+  color: #34495e;
+  max-width: 920px;
+}
+
+@media (max-width: 900px) {
+  .about-story-card {
+    padding: clamp(20px, 5vw, 26px);
+  }
+
+  .about-story-text p {
+    max-width: 100%;
+  }
+}
+
 .about-content-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
