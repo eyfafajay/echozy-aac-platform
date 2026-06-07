@@ -82,6 +82,47 @@ function getTextByLanguage(item, language) {
   return item.textEn || item.text || item.textMs || '';
 }
 
+function getStoredUsageCounts() {
+  return JSON.parse(localStorage.getItem('echozyUsageCounts') || '{}');
+}
+
+function saveStoredUsageCounts(data) {
+  localStorage.setItem('echozyUsageCounts', JSON.stringify(data));
+}
+
+function getPatientUsageCounts() {
+  const allUsage = getStoredUsageCounts();
+
+  if (!allUsage[patientId]) {
+    allUsage[patientId] = {
+      phrases: {},
+      vocabulary: {}
+    };
+    saveStoredUsageCounts(allUsage);
+  }
+
+  return allUsage[patientId];
+}
+
+function recordBoardCardClick(type, itemId) {
+  const allUsage = getStoredUsageCounts();
+  const patientUsage = getPatientUsageCounts();
+  const targetUsage = type === 'phrases' ? patientUsage.phrases : patientUsage.vocabulary;
+
+  if (!itemId) {
+    return;
+  }
+
+  if (!targetUsage[itemId]) {
+    targetUsage[itemId] = 0;
+  }
+
+  targetUsage[itemId] += 1;
+
+  allUsage[patientId] = patientUsage;
+  saveStoredUsageCounts(allUsage);
+}
+
 function getStoredCardScale() {
   const storedScale = Number(localStorage.getItem(`echozyCardScale_${patientId}`));
 
@@ -344,7 +385,12 @@ function renderCards() {
         const displayText = getTextByLanguage(item, resolvedLanguage);
 
         return `
-          <button type="button" class="board-card ${themeClass}" data-text="${displayText}">
+          <button
+            type="button"
+            class="board-card ${themeClass}"
+            data-item-id="${item.id}"
+            data-text="${displayText}"
+          >
             <div class="board-card-image">
               <img src="${item.image || DEFAULT_IMAGE}" alt="${displayText}" />
             </div>
@@ -357,8 +403,12 @@ function renderCards() {
   const boardCards = boardCardsGrid.querySelectorAll('.board-card');
   boardCards.forEach((card) => {
     card.addEventListener('click', () => {
+      const itemId = card.dataset.itemId;
       const text = card.dataset.text;
+
       if (!text) return;
+
+      recordBoardCardClick(currentType, itemId);
       builtMessage.push(text);
       updateMessageBox();
     });
