@@ -29,17 +29,22 @@ const frequentlyUsedVocabularyClicks = document.getElementById('frequentlyUsedVo
 const frequentlyUsedPhraseCards = document.getElementById('frequentlyUsedPhraseCards');
 const frequentlyUsedVocabularyCards = document.getElementById('frequentlyUsedVocabularyCards');
 
-const frequentlyUsedPhraseCountLabel = document.getElementById('frequentlyUsedPhraseCountLabel');
-const frequentlyUsedVocabularyCountLabel = document.getElementById('frequentlyUsedVocabularyCountLabel');
+const frequentlyUsedCategoryList = document.getElementById('frequentlyUsedCategoryList');
+const frequentlyUsedCardsGrid = document.getElementById('frequentlyUsedCardsGrid');
+const frequentlyUsedContentTitle = document.getElementById('frequentlyUsedContentTitle');
+const frequentlyUsedContentCount = document.getElementById('frequentlyUsedContentCount');
+const frequentlyUsedContentHeader = document.getElementById('frequentlyUsedContentHeader');
 
-const frequentlyUsedPhrasesGrid = document.getElementById('frequentlyUsedPhrasesGrid');
-const frequentlyUsedVocabularyGrid = document.getElementById('frequentlyUsedVocabularyGrid');
+const frequentTabButtons = document.querySelectorAll('[data-frequent-type]');
 
 const DEFAULT_IMAGE = '../../assets/images/placeholders/defaultPV.png';
 
 const MIN_CARD_SCALE = 80;
 const MAX_CARD_SCALE = 150;
 const CARD_SCALE_STEP = 10;
+
+let currentType = 'phrases';
+let currentCategory = 'urgent';
 
 function getStoredPatients() {
   return JSON.parse(localStorage.getItem('echozyPatients') || '{}');
@@ -227,6 +232,54 @@ function getPatientUsageCounts() {
   return allUsage[patientId];
 }
 
+const phraseCategoryLabels = {
+  urgent: 'Urgent Needs',
+  basic: 'Basic Responses',
+  feelings: 'Feelings & Emotions',
+  physical: 'Physical Condition',
+  daily: 'Daily Needs',
+  social: 'People & Social Communication',
+  rehab: 'Rehabilitation',
+  activities: 'Activities & Preferences'
+};
+
+const vocabularyCategoryLabels = {
+  people: 'People',
+  food: 'Food & Drink',
+  places: 'Places',
+  body: 'Body & Health',
+  feelings: 'Feelings',
+  actions: 'Actions & Verbs'
+};
+
+const frequentCategoryThemeMap = {
+  urgent: 'frequent-theme-urgent',
+  basic: 'frequent-theme-basic',
+  feelings: 'frequent-theme-feelings',
+  physical: 'frequent-theme-physical',
+  daily: 'frequent-theme-daily',
+  social: 'frequent-theme-social',
+  rehab: 'frequent-theme-rehab',
+  activities: 'frequent-theme-activities',
+  people: 'frequent-theme-people',
+  food: 'frequent-theme-food',
+  places: 'frequent-theme-places',
+  body: 'frequent-theme-body',
+  actions: 'frequent-theme-actions'
+};
+
+function getCurrentData() {
+  return currentType === 'phrases' ? getPatientPhrases() : getPatientVocabulary();
+}
+
+function getCurrentLabels() {
+  return currentType === 'phrases' ? phraseCategoryLabels : vocabularyCategoryLabels;
+}
+
+function getCategoryThemeClass(categoryKey) {
+  return frequentCategoryThemeMap[categoryKey] || 'frequent-theme-default';
+}
+
 function flattenItemsByType(data, type) {
   return Object.entries(data).flatMap(([categoryKey, items]) => {
     if (!Array.isArray(items)) return [];
@@ -253,91 +306,7 @@ function countAllClicks(clicksObject) {
   return Object.values(clicksObject).reduce((total, count) => total + count, 0);
 }
 
-function getFrequentlyUsedThemeClass(categoryKey, type) {
-  const phraseThemeMap = {
-    urgent: 'frequent-theme-urgent',
-    basic: 'frequent-theme-basic',
-    feelings: 'frequent-theme-feelings',
-    physical: 'frequent-theme-physical',
-    daily: 'frequent-theme-daily',
-    social: 'frequent-theme-social',
-    rehab: 'frequent-theme-rehab',
-    activities: 'frequent-theme-activities'
-  };
-
-  const vocabularyThemeMap = {
-    people: 'frequent-theme-people',
-    food: 'frequent-theme-food',
-    places: 'frequent-theme-places',
-    body: 'frequent-theme-body',
-    feelings: 'frequent-theme-vocab-feelings',
-    actions: 'frequent-theme-actions'
-  };
-
-  if (type === 'phrases') {
-    return phraseThemeMap[categoryKey] || 'frequent-theme-default';
-  }
-
-  return vocabularyThemeMap[categoryKey] || 'frequent-theme-default';
-}
-
-function recordUsage(type, itemId) {
-  const allUsage = getStoredUsageCounts();
-  const patientUsage = getPatientUsageCounts();
-  const targetUsage = type === 'phrases' ? patientUsage.phrases : patientUsage.vocabulary;
-
-  if (!targetUsage[itemId]) {
-    targetUsage[itemId] = 0;
-  }
-
-  targetUsage[itemId] += 1;
-
-  allUsage[patientId] = patientUsage;
-  saveStoredUsageCounts(allUsage);
-
-  renderFrequentlyUsed();
-}
-
-function renderCardGrid(gridElement, items, type) {
-  if (!gridElement) return;
-
-  const resolvedLanguage = getResolvedPatientLanguage();
-
-  gridElement.innerHTML = items.length
-    ? items.map((item) => {
-        const themeClass = getFrequentlyUsedThemeClass(item.categoryKey, type);
-        const displayText = getTextByLanguage(item, resolvedLanguage);
-
-        return `
-          <button
-            type="button"
-            class="frequently-used-card ${themeClass}"
-            data-item-id="${item.id}"
-            data-item-type="${type}"
-          >
-            <div class="frequently-used-card-image">
-              <img src="${item.image || DEFAULT_IMAGE}" alt="${displayText}" />
-            </div>
-            <div class="frequently-used-card-text">
-              <span>${displayText}</span>
-              <small>Clicked ${item.clickCount} time${item.clickCount === 1 ? '' : 's'}</small>
-            </div>
-          </button>
-        `;
-      }).join('')
-    : `<div class="board-empty-state">No frequently used ${type} yet.</div>`;
-
-  const cards = gridElement.querySelectorAll('[data-item-id]');
-  cards.forEach((card) => {
-    card.addEventListener('click', () => {
-      const itemType = card.dataset.itemType;
-      const itemId = card.dataset.itemId;
-      recordUsage(itemType, itemId);
-    });
-  });
-}
-
-function renderFrequentlyUsed() {
+function updateTopSummary() {
   const phraseData = getPatientPhrases();
   const vocabularyData = getPatientVocabulary();
   const usageData = getPatientUsageCounts();
@@ -363,18 +332,144 @@ function renderFrequentlyUsed() {
   if (frequentlyUsedVocabularyCards) {
     frequentlyUsedVocabularyCards.textContent = topVocabulary.length;
   }
-
-  if (frequentlyUsedPhraseCountLabel) {
-    frequentlyUsedPhraseCountLabel.textContent = `${topPhrases.length} cards`;
-  }
-
-  if (frequentlyUsedVocabularyCountLabel) {
-    frequentlyUsedVocabularyCountLabel.textContent = `${topVocabulary.length} cards`;
-  }
-
-  renderCardGrid(frequentlyUsedPhrasesGrid, topPhrases, 'phrases');
-  renderCardGrid(frequentlyUsedVocabularyGrid, topVocabulary, 'vocabulary');
 }
+
+function renderCategories() {
+  const labels = getCurrentLabels();
+  const data = getCurrentData();
+  const usageData = getPatientUsageCounts();
+  const categoryKeys = Object.keys(labels);
+
+  if (!currentCategory || !labels[currentCategory]) {
+    currentCategory = categoryKeys[0];
+  }
+
+  frequentlyUsedCategoryList.innerHTML = categoryKeys.map((key) => {
+    const items = Array.isArray(data[key]) ? data[key] : [];
+    const usedCount = items.filter((item) => {
+      const clickCount =
+        currentType === 'phrases'
+          ? (usageData.phrases[item.id] || 0)
+          : (usageData.vocabulary[item.id] || 0);
+
+      return clickCount > 0;
+    }).length;
+
+    return `
+      <button
+        type="button"
+        class="board-category-btn ${getCategoryThemeClass(key)} ${key === currentCategory ? 'active-board-category' : ''}"
+        data-category="${key}"
+      >
+        <span>${labels[key]}</span>
+        <small>${usedCount} Cards</small>
+      </button>
+    `;
+  }).join('');
+
+  const categoryButtons = frequentlyUsedCategoryList.querySelectorAll('[data-category]');
+  categoryButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      currentCategory = button.dataset.category;
+      renderCategories();
+      renderFrequentlyUsedCards();
+    });
+  });
+}
+
+function recordUsage(type, itemId) {
+  const allUsage = getStoredUsageCounts();
+  const patientUsage = getPatientUsageCounts();
+  const targetUsage = type === 'phrases' ? patientUsage.phrases : patientUsage.vocabulary;
+
+  if (!targetUsage[itemId]) {
+    targetUsage[itemId] = 0;
+  }
+
+  targetUsage[itemId] += 1;
+
+  allUsage[patientId] = patientUsage;
+  saveStoredUsageCounts(allUsage);
+
+  updateTopSummary();
+  renderCategories();
+  renderFrequentlyUsedCards();
+}
+
+function renderFrequentlyUsedCards() {
+  const labels = getCurrentLabels();
+  const data = getCurrentData();
+  const usageData = getPatientUsageCounts();
+  const items = Array.isArray(data[currentCategory]) ? data[currentCategory] : [];
+  const resolvedLanguage = getResolvedPatientLanguage();
+  const themeClass = getCategoryThemeClass(currentCategory);
+
+  const filteredItems = items
+    .map((item) => ({
+      ...item,
+      clickCount:
+        currentType === 'phrases'
+          ? (usageData.phrases[item.id] || 0)
+          : (usageData.vocabulary[item.id] || 0)
+    }))
+    .filter((item) => item.clickCount > 0)
+    .sort((a, b) => b.clickCount - a.clickCount);
+
+  if (frequentlyUsedContentTitle) {
+    frequentlyUsedContentTitle.textContent = labels[currentCategory];
+  }
+
+  if (frequentlyUsedContentCount) {
+    frequentlyUsedContentCount.textContent = `${filteredItems.length} cards`;
+  }
+
+  if (frequentlyUsedContentHeader) {
+    frequentlyUsedContentHeader.className = 'practice-content-header';
+    frequentlyUsedContentHeader.classList.add(themeClass);
+  }
+
+  frequentlyUsedCardsGrid.innerHTML = filteredItems.length
+    ? filteredItems.map((item) => {
+        const displayText = getTextByLanguage(item, resolvedLanguage);
+
+        return `
+          <button
+            type="button"
+            class="frequently-used-card ${themeClass}"
+            data-item-id="${item.id}"
+          >
+            <div class="frequently-used-card-image">
+              <img src="${item.image || DEFAULT_IMAGE}" alt="${displayText}" />
+            </div>
+            <div class="frequently-used-card-text">
+              <span>${displayText}</span>
+              <small>Clicked ${item.clickCount} time${item.clickCount === 1 ? '' : 's'}</small>
+            </div>
+          </button>
+        `;
+      }).join('')
+    : `<div class="board-empty-state">No frequently used cards in this category yet.</div>`;
+
+  const cards = frequentlyUsedCardsGrid.querySelectorAll('[data-item-id]');
+  cards.forEach((card) => {
+    card.addEventListener('click', () => {
+      recordUsage(currentType, card.dataset.itemId);
+    });
+  });
+}
+
+frequentTabButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    frequentTabButtons.forEach((btn) => btn.classList.remove('active-board-tab'));
+    button.classList.add('active-board-tab');
+
+    currentType = button.dataset.frequentType;
+    currentCategory = currentType === 'phrases' ? 'urgent' : 'people';
+
+    renderCategories();
+    renderFrequentlyUsedCards();
+  });
+});
 
 if (decreaseCardSizeBtn) {
   decreaseCardSizeBtn.addEventListener('click', () => {
@@ -394,5 +489,7 @@ if (increaseCardSizeBtn) {
   });
 }
 
-renderFrequentlyUsed();
+updateTopSummary();
+renderCategories();
+renderFrequentlyUsedCards();
 applyCardScale();
