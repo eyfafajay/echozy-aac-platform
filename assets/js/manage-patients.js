@@ -143,6 +143,10 @@ if (openAddPatientModal && addPatientModal) {
       patientAgeInput.value = '';
     }
 
+    if (patientStatusInput) {
+      patientStatusInput.value = 'Inactive';
+    }
+
     addPatientModal.classList.add('active');
   });
 }
@@ -168,7 +172,6 @@ if (addPatientForm) {
     const fullName = patientFullName.value.trim();
     const age = patientAgeInput.value.trim();
     const gender = patientGenderInput.value;
-    const status = patientStatusInput.value;
     const dob = patientDobInput.value;
 
     if (!currentUserId) {
@@ -176,7 +179,7 @@ if (addPatientForm) {
       return;
     }
 
-    if (!fullName || !id || !age || !gender || !status || !dob) {
+    if (!fullName || !id || !age || !gender || !dob) {
       alert('Please complete all patient details before saving.');
       return;
     }
@@ -197,7 +200,7 @@ if (addPatientForm) {
       gender,
       age,
       dob,
-      status,
+      status: 'Inactive',
       preferredLanguage: 'English',
       avatar: getAvatarByGender(gender)
     };
@@ -218,7 +221,7 @@ if (addPatientForm) {
     const newPatientQuery = new URLSearchParams({
       patient: id,
       name: fullName,
-      status: status,
+      status: 'Inactive',
       language: 'English',
       role: currentRole,
       userId: currentUserId,
