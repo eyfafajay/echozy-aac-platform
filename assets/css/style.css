@@ -615,6 +615,24 @@ main {
   transition: all 0.22s ease;
 }
 
+.admin-role-card {
+  grid-column: 1 / -1;
+  width: min(520px, 100%);
+  margin: 0 auto;
+  min-height: 280px;
+  border: 2px solid rgba(31, 78, 140, 0.12);
+}
+
+.admin-role-card .role-icon {
+  background: #edf6fd;
+  width: 62px;
+  height: 62px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .role-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 12px 24px rgba(31, 78, 140, 0.16);
