@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Healthcare Provider Settings | Echozy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700;800&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+</head>
+<body>
+  <header class="navbar">
+    <div class="logo-section">
+      <img src="../../assets/images/logo.png" alt="Echozy Logo" class="logo" />
+      <span class="logo-text">Echozy</span>
+    </div>
+
+    <div class="top-nav-shape">
+      <nav class="nav-links">
+        <a href="dashboard.html" id="dashboardNavLink">Dashboard</a>
+        <a href="manage-patients.html" id="managePatientsNavLink">Manage Patients</a>
+        <a href="settings-provider.html" class="active" id="settingsNavLink">Settings</a>
+        <a href="../../index.html" class="sign-in-link" id="logoutNavLink">Logout</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="settings-page">
+    <section class="settings-header">
+      <div>
+        <p class="dashboard-label">ACCOUNT SETTINGS</p>
+        <h1>Healthcare Provider Settings</h1>
+        <p class="dashboard-subtext">
+          Manage your provider profile, organization information, account preferences, and notification settings.
+        </p>
+      </div>
+    </section>
+
+    <section class="settings-layout">
+      <div class="settings-sidebar-card">
+        <div class="settings-profile-top">
+          <div class="settings-avatar-wrapper">
+            <img src="../../assets/images/avatars/male.png" alt="Healthcare Provider Profile" class="settings-avatar" id="settingsProfileAvatar" />
+          </div>
+
+          <div>
+            <h2 id="settingsProfileName">Healthcare Provider</h2>
+            <p id="settingsProfileRole">Healthcare Provider</p>
+          </div>
+        </div>
+
+        <div class="settings-side-info">
+          <div class="settings-side-item">
+            <span>Email</span>
+            <strong id="settingsProfileEmail">provider@example.com</strong>
+          </div>
+
+          <div class="settings-side-item">
+            <span>Assigned Patients</span>
+            <strong id="settingsAssignedPatientsCount">0 Patients</strong>
+          </div>
+
+          <div class="settings-side-item">
+            <span>Account Type</span>
+            <strong>Healthcare Provider</strong>
+          </div>
+
+          <div class="settings-side-item">
+            <span>Department</span>
+            <strong id="settingsProfileDepartment">Rehabilitation</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-main-content">
+        <form class="settings-form" id="providerSettingsForm">
+          <div class="settings-card">
+            <h2>Profile Information</h2>
+
+            <div class="modal-form-grid">
+              <div class="form-group">
+                <label for="provider-fullname">Full Name</label>
+                <input type="text" id="provider-fullname" placeholder="Enter your full name" />
+              </div>
+
+              <div class="form-group">
+                <label for="provider-email">Email Address</label>
+                <input type="email" id="provider-email" placeholder="Enter your email address" />
+              </div>
+
+              <div class="form-group">
+                <label for="provider-phone">Phone Number</label>
+                <input type="text" id="provider-phone" placeholder="Enter your phone number" />
+              </div>
+
+              <div class="form-group">
+                <label for="provider-gender">Gender</label>
+                <select id="provider-gender">
+                  <option value="">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h2>Professional Information</h2>
+
+            <div class="modal-form-grid">
+              <div class="form-group">
+                <label for="provider-organization">Organization / Hospital</label>
+                <input type="text" id="provider-organization" placeholder="Enter organization or hospital name" />
+              </div>
+
+              <div class="form-group">
+                <label for="provider-department">Department</label>
+                <input type="text" id="provider-department" placeholder="Enter department" />
+              </div>
+
+              <div class="form-group">
+                <label for="provider-position">Position / Role</label>
+                <input type="text" id="provider-position" placeholder="Enter position or role" />
+              </div>
+
+              <div class="form-group">
+                <label for="provider-license">License / Staff ID</label>
+                <input type="text" id="provider-license" placeholder="Enter license or staff ID" />
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h2>Change Password</h2>
+
+            <div class="modal-form-grid">
+              <div class="form-group">
+                <label for="provider-current-password">Current Password</label>
+                <input type="password" id="provider-current-password" placeholder="Enter current password" />
+              </div>
+
+              <div class="form-group">
+                <label for="provider-new-password">New Password</label>
+                <input type="password" id="provider-new-password" placeholder="Enter new password" />
+              </div>
+
+              <div class="form-group">
+                <label for="provider-confirm-password">Confirm New Password</label>
+                <input type="password" id="provider-confirm-password" placeholder="Confirm new password" />
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-action-row">
+            <button type="reset" class="modal-cancel-btn">Reset</button>
+            <button type="submit" class="auth-submit-btn">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Echozy. All rights reserved.</p>
+  </footer>
+
+  <script src="../../assets/js/settings-provider.js"></script>
+</body>
+</html>

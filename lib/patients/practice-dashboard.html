@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Practice Dashboard | Echozy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700;800&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+</head>
+<body>
+  <header class="navbar">
+    <div class="logo-section">
+      <img src="../../assets/images/logo.png" alt="Echozy Logo" class="logo" />
+      <span class="logo-text">Echozy</span>
+    </div>
+
+    <div class="top-nav-shape">
+      <nav class="nav-links session-nav-links">
+        <a href="frequently-used.html" id="frequentlyUsedNavLink">Frequently Used</a>
+        <a href="phrases-vocabulary.html" id="phrasesVocabularyNavLink">Phrases & Vocabulary</a>
+        <a href="board.html" id="boardNavLink">Echozy Board</a>
+        <a href="practice-dashboard.html" class="active" id="practiceDashboardNavLink">Practice Dashboard</a>
+        <a href="../main/patient-dashboard.html" class="sign-in-link" id="backToPatientDashboardBtn">Quit Session</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="practice-page">
+    <section class="practice-header">
+      <div>
+        <p class="dashboard-label">PRACTICE DASHBOARD</p>
+        <h1 id="practiceHeading">Practice for Selected Patient</h1>
+        <p class="dashboard-subtext" id="practiceSubtext">
+          Mark phrases and vocabulary as practiced to track communication progress.
+        </p>
+      </div>
+
+      <div class="practice-header-actions">
+        <span class="board-patient-status active-badge" id="practicePatientStatus">Active</span>
+
+        <div class="card-size-control" aria-label="Card size control">
+          <span class="card-size-label">Card Size</span>
+          <button type="button" class="card-size-btn" id="decreaseCardSizeBtn" aria-label="Decrease card size">−</button>
+          <span class="card-size-value" id="cardSizeValue">100%</span>
+          <button type="button" class="card-size-btn" id="increaseCardSizeBtn" aria-label="Increase card size">+</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="practice-summary-grid">
+      <div class="practice-summary-card">
+        <span>Practiced Phrases</span>
+        <strong id="practicedPhrasesPercent">0%</strong>
+      </div>
+
+      <div class="practice-summary-card">
+        <span>Practiced Vocabulary</span>
+        <strong id="practicedVocabularyPercent">0%</strong>
+      </div>
+
+      <div class="practice-summary-card">
+        <span>Total Practiced Phrase Cards</span>
+        <strong id="practicedPhrasesCount">0</strong>
+      </div>
+
+      <div class="practice-summary-card">
+        <span>Total Practiced Vocabulary Cards</span>
+        <strong id="practicedVocabularyCount">0</strong>
+      </div>
+    </section>
+
+    <section class="practice-tab-section">
+      <div class="board-tab-group">
+        <button type="button" class="board-tab-btn active-board-tab" data-practice-type="phrases">Phrases</button>
+        <button type="button" class="board-tab-btn" data-practice-type="vocabulary">Vocabulary</button>
+      </div>
+    </section>
+
+    <section class="practice-layout">
+      <aside class="practice-sidebar">
+        <div class="board-side-card">
+          <h2>Categories</h2>
+          <div class="board-category-list" id="practiceCategoryList"></div>
+        </div>
+      </aside>
+
+      <section class="practice-content-panel">
+        <div class="practice-content-header">
+          <h2 id="practiceContentTitle">Urgent Needs</h2>
+          <p id="practiceContentCount">0 cards</p>
+        </div>
+
+        <div class="practice-cards-grid" id="practiceCardsGrid"></div>
+      </section>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Echozy. All rights reserved.</p>
+  </footer>
+
+  <script src="../../assets/js/practice-dashboard.js"></script>
+</body>
+</html>

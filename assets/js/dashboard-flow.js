@@ -1,0 +1,218 @@
+const params = new URLSearchParams(window.location.search);
+const storedSession = JSON.parse(localStorage.getItem('echozySession') || '{}');
+
+const role = params.get('role') || storedSession.role || 'caregiver';
+const userId = params.get('userId') || storedSession.userId || 'U0001';
+const name = params.get('name') || storedSession.fullName || 'User';
+const email = params.get('email') || storedSession.email || '';
+
+const dashboardRoleLabel = document.getElementById('dashboardRoleLabel');
+const dashboardGreeting = document.getElementById('dashboardGreeting');
+const dashboardSubtext = document.getElementById('dashboardSubtext');
+
+const dashboardNavLink = document.getElementById('dashboardNavLink');
+const managePatientsNavLink = document.getElementById('managePatientsNavLink');
+const settingsNavLink = document.getElementById('settingsNavLink');
+const logoutNavLink = document.getElementById('logoutNavLink');
+
+const dashboardTotalPatients = document.getElementById('dashboardTotalPatients');
+const dashboardTotalSessions = document.getElementById('dashboardTotalSessions');
+const dashboardActivityLogBody = document.getElementById('dashboardActivityLogBody');
+
+const sharedQuery = new URLSearchParams({
+  role,
+  userId,
+  name
+}).toString();
+
+if (dashboardRoleLabel) {
+  dashboardRoleLabel.textContent =
+    role === 'provider'
+      ? 'HEALTHCARE PROVIDER DASHBOARD'
+      : 'CAREGIVER DASHBOARD';
+}
+
+if (dashboardGreeting) {
+  dashboardGreeting.textContent =
+    role === 'provider'
+      ? `Welcome back, ${name}`
+      : `Hello, ${name}`;
+}
+
+if (dashboardSubtext) {
+  dashboardSubtext.textContent =
+    role === 'provider'
+      ? 'Monitor assigned patients, track rehabilitation progress, and manage communication support from one place.'
+      : 'Support your linked patient, manage communication content, and track daily communication progress from one place.';
+}
+
+if (dashboardNavLink) {
+  dashboardNavLink.href = `dashboard.html?${sharedQuery}`;
+}
+
+if (managePatientsNavLink) {
+  managePatientsNavLink.href = `manage-patients.html?${sharedQuery}`;
+}
+
+if (settingsNavLink) {
+  settingsNavLink.href =
+    role === 'provider'
+      ? `settings-provider.html?${sharedQuery}`
+      : `settings-caregiver.html?${sharedQuery}`;
+}
+
+if (logoutNavLink) {
+  logoutNavLink.addEventListener('click', () => {
+    localStorage.removeItem('echozySession');
+  });
+}
+
+function getStoredPatients() {
+  return JSON.parse(localStorage.getItem('echozyPatients') || '{}');
+}
+
+function getStoredSessionLogs() {
+  return JSON.parse(localStorage.getItem('echozySessionLogs') || '{}');
+}
+
+function formatDate(isoString) {
+  if (!isoString) return '—';
+
+  return new Date(isoString).toLocaleDateString('en-MY', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+}
+
+function formatTime(isoString) {
+  if (!isoString) return '—';
+
+  return new Date(isoString).toLocaleTimeString('en-MY', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+}
+
+function formatDurationFromRecord(record) {
+  const enteredAt = record.enteredAt ? new Date(record.enteredAt) : null;
+  const quitAt = record.quitAt ? new Date(record.quitAt) : null;
+
+  if (!enteredAt || !quitAt) {
+    return '—';
+  }
+
+  if (Number.isNaN(enteredAt.getTime()) || Number.isNaN(quitAt.getTime())) {
+    return '—';
+  }
+
+  const diffMs = quitAt - enteredAt;
+
+  if (diffMs <= 0) {
+    return '—';
+  }
+
+  const totalMinutes = Math.round(diffMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+
+  return `${minutes} mins`;
+}
+
+function getPatientsForCurrentUser() {
+  const allPatients = getStoredPatients();
+  return Object.values(allPatients);
+}
+
+function getSessionEntriesForCurrentUser() {
+  const allPatients = getStoredPatients();
+  const allSessionLogs = getStoredSessionLogs();
+
+  return Object.values(allPatients)
+    .flatMap((patient) => {
+      const patientLogs = allSessionLogs[patient.id] || [];
+
+      return patientLogs.map((log) => ({
+        patientName: patient.name,
+        patientId: patient.id,
+        patientStatus: patient.status || 'Active',
+        patientLanguage: patient.preferredLanguage || 'English',
+        enteredAt: log.enteredAt || '',
+        quitAt: log.quitAt || ''
+      }));
+    })
+    .sort((a, b) => {
+      const aTime = a.quitAt || a.enteredAt || '';
+      const bTime = b.quitAt || b.enteredAt || '';
+      return new Date(bTime) - new Date(aTime);
+    });
+}
+
+function renderDashboardSummary() {
+  const patients = getPatientsForCurrentUser();
+  const sessionEntries = getSessionEntriesForCurrentUser();
+
+  if (dashboardTotalPatients) {
+    dashboardTotalPatients.textContent = patients.length;
+  }
+
+  if (dashboardTotalSessions) {
+    dashboardTotalSessions.textContent = sessionEntries.length;
+  }
+}
+
+function renderActivityLog() {
+  if (!dashboardActivityLogBody) return;
+
+  const sessionEntries = getSessionEntriesForCurrentUser();
+
+  if (!sessionEntries.length) {
+    dashboardActivityLogBody.innerHTML = `
+      <tr>
+        <td colspan="7">No session activity yet.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  dashboardActivityLogBody.innerHTML = sessionEntries.map((entry) => {
+    const sessionDate = entry.enteredAt || entry.quitAt;
+
+    const patientDashboardQuery = new URLSearchParams({
+      patient: entry.patientId,
+      name: entry.patientName,
+      status: entry.patientStatus || 'Active',
+      language: entry.patientLanguage || 'English',
+      role,
+      userId,
+      user: name
+    }).toString();
+
+    return `
+      <tr>
+        <td>${entry.patientName}</td>
+        <td>
+          <a
+            href="patient-dashboard.html?${patientDashboardQuery}"
+            class="patient-dashboard-link-btn"
+            title="View Patient Dashboard"
+            aria-label="View Patient Dashboard"
+          >↗</a>
+        </td>
+        <td>${entry.patientId}</td>
+        <td>${formatDate(sessionDate)}</td>
+        <td>${formatTime(entry.enteredAt)}</td>
+        <td>${formatTime(entry.quitAt)}</td>
+        <td>${formatDurationFromRecord(entry)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+renderDashboardSummary();
+renderActivityLog();

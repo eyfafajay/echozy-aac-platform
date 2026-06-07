@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manage Patients | Echozy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700;800&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="navbar">
+    <div class="logo-section">
+      <img src="../../assets/images/logo.png" alt="Echozy Logo" class="logo" />
+      <span class="logo-text">Echozy</span>
+    </div>
+
+    <div class="top-nav-shape">
+      <nav class="nav-links">
+        <a href="dashboard.html" id="dashboardNavLink">Dashboard</a>
+        <a href="manage-patients.html" class="active" id="managePatientsNavLink">Manage Patients</a>
+        <a href="settings-caregiver.html" id="settingsNavLink">Settings</a>
+        <a href="../../index.html" class="sign-in-link" id="logoutNavLink">Logout</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="manage-patients-page">
+    <section class="manage-patients-header">
+      <div>
+        <p class="dashboard-label">PATIENT MANAGEMENT</p>
+        <h1>Manage Patients</h1>
+        <p class="dashboard-subtext">
+          Add new patients, view their profiles, and manage communication support records in Echozy.
+        </p>
+      </div>
+
+      <button class="add-patient-btn" type="button" id="openAddPatientModal">+ Add Patient</button>
+    </section>
+
+    <section class="patients-grid" id="patientsGrid"></section>
+
+    <!-- Add Patient Modal -->
+    <div class="modal-overlay" id="addPatientModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div>
+            <p class="dashboard-label">NEW PATIENT</p>
+            <h2>Add Patient</h2>
+          </div>
+          <button class="modal-close-btn" type="button" id="closeAddPatientModal">&times;</button>
+        </div>
+
+        <form class="modal-form" id="addPatientForm">
+          <div class="modal-form-grid">
+            <div class="form-group">
+              <label for="patient-fullname">Full Name</label>
+              <input type="text" id="patient-fullname" placeholder="Enter patient full name" />
+            </div>
+
+            <div class="form-group">
+              <label for="patient-id">Patient ID (Last 4 digits of MyKad)</label>
+              <input
+                type="text"
+                id="patient-id"
+                placeholder="Example: 4821"
+                maxlength="4"
+                inputmode="numeric"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="patient-age">Age</label>
+              <input type="number" id="patient-age" placeholder="Auto calculated" readonly />
+            </div>
+
+            <div class="form-group">
+              <label for="patient-gender">Gender</label>
+              <select id="patient-gender">
+                <option value="">Select gender</option>
+                <option>Male</option>
+                <option>Female</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="patient-status">Status</label>
+              <select id="patient-status">
+                <option value="">Select status</option>
+                <option>Active</option>
+                <option>Inactive</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="patient-dob">Date of Birth</label>
+              <input type="date" id="patient-dob" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="patient-notes">Notes</label>
+            <textarea id="patient-notes" rows="4" placeholder="Enter patient notes"></textarea>
+          </div>
+
+          <div class="modal-action-row">
+            <button type="button" class="modal-cancel-btn" id="cancelAddPatientModal">Cancel</button>
+            <button type="submit" class="auth-submit-btn">Save Patient</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Echozy. All rights reserved.</p>
+  </footer>
+
+  <script src="../../assets/js/manage-patients.js"></script>
+</body>
+</html>

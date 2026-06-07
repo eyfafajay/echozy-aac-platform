@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Frequently Used | Echozy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700;800&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+</head>
+<body>
+  <header class="navbar">
+    <div class="logo-section">
+      <img src="../../assets/images/logo.png" alt="Echozy Logo" class="logo" />
+      <span class="logo-text">Echozy</span>
+    </div>
+
+    <div class="top-nav-shape">
+      <nav class="nav-links session-nav-links">
+        <a href="frequently-used.html" class="active" id="frequentlyUsedNavLink">Frequently Used</a>
+        <a href="phrases-vocabulary.html" id="phrasesVocabularyNavLink">Phrases & Vocabulary</a>
+        <a href="board.html" id="boardNavLink">Echozy Board</a>
+        <a href="practice-dashboard.html" id="practiceDashboardNavLink">Practice Dashboard</a>
+        <a href="../main/patient-dashboard.html" class="sign-in-link" id="backToPatientDashboardBtn">Quit Session</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="frequently-used-page">
+    <section class="frequently-used-header">
+      <div>
+        <p class="dashboard-label">FREQUENTLY USED</p>
+        <h1 id="frequentlyUsedHeading">Frequently Used for Selected Patient</h1>
+        <p class="dashboard-subtext" id="frequentlyUsedSubtext">
+          Easy access to the phrases and vocabulary cards most often used by this patient.
+        </p>
+      </div>
+
+      <div class="frequently-used-header-actions">
+        <span class="board-patient-status active-badge" id="frequentlyUsedPatientStatus">Active</span>
+
+        <div class="card-size-control" aria-label="Card size control">
+          <span class="card-size-label">Card Size</span>
+          <button type="button" class="card-size-btn" id="decreaseCardSizeBtn" aria-label="Decrease card size">−</button>
+          <span class="card-size-value" id="cardSizeValue">100%</span>
+          <button type="button" class="card-size-btn" id="increaseCardSizeBtn" aria-label="Increase card size">+</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="frequently-used-summary-grid">
+      <div class="practice-summary-card">
+        <span>Total Phrase Clicks</span>
+        <strong id="frequentlyUsedPhraseClicks">0</strong>
+      </div>
+
+      <div class="practice-summary-card">
+        <span>Total Vocabulary Clicks</span>
+        <strong id="frequentlyUsedVocabularyClicks">0</strong>
+      </div>
+
+      <div class="practice-summary-card">
+        <span>Top Phrase Cards</span>
+        <strong id="frequentlyUsedPhraseCards">0</strong>
+      </div>
+
+      <div class="practice-summary-card">
+        <span>Top Vocabulary Cards</span>
+        <strong id="frequentlyUsedVocabularyCards">0</strong>
+      </div>
+    </section>
+
+    <section class="frequently-used-sections">
+      <div class="frequently-used-panel">
+        <div class="practice-content-header">
+          <h2>Frequently Used Phrases</h2>
+          <p id="frequentlyUsedPhraseCountLabel">0 cards</p>
+        </div>
+
+        <div class="frequently-used-cards-grid" id="frequentlyUsedPhrasesGrid"></div>
+      </div>
+
+      <div class="frequently-used-panel">
+        <div class="practice-content-header">
+          <h2>Frequently Used Vocabulary</h2>
+          <p id="frequentlyUsedVocabularyCountLabel">0 cards</p>
+        </div>
+
+        <div class="frequently-used-cards-grid" id="frequentlyUsedVocabularyGrid"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Echozy. All rights reserved.</p>
+  </footer>
+
+  <script src="../../assets/js/frequently-used.js"></script>
+</body>
+</html>

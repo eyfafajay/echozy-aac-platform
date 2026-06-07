@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Echozy Board</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700;800&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+</head>
+<body>
+  <header class="navbar">
+    <div class="logo-section">
+      <img src="../../assets/images/logo.png" alt="Echozy Logo" class="logo" />
+      <span class="logo-text">Echozy</span>
+    </div>
+
+    <div class="top-nav-shape">
+      <nav class="nav-links session-nav-links">
+        <a href="frequently-used.html" id="frequentlyUsedNavLink">Frequently Used</a>
+        <a href="phrases-vocabulary.html" id="phrasesVocabularyNavLink">Phrases & Vocabulary</a>
+        <a href="board.html" class="active" id="boardNavLink">Echozy Board</a>
+        <a href="practice-dashboard.html" id="practiceDashboardNavLink">Practice Dashboard</a>
+        <a href="../main/patient-dashboard.html" class="sign-in-link" id="backToPatientDashboardBtn">Quit Session</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="board-page">
+    <section class="board-header">
+      <div>
+        <p class="dashboard-label">AAC COMMUNICATION BOARD</p>
+        <h1 id="boardPatientHeading">Echozy Board for Selected Patient</h1>
+        <p class="dashboard-subtext" id="boardSubtext">
+          Tap phrases and vocabulary cards to build communication for this patient.
+        </p>
+      </div>
+
+      <div class="board-header-actions">
+        <span class="board-patient-status active-badge" id="boardPatientStatus">Active</span>
+
+        <div class="card-size-control" aria-label="Card size control">
+          <span class="card-size-label">Card Size</span>
+          <button type="button" class="card-size-btn" id="decreaseCardSizeBtn" aria-label="Decrease card size">−</button>
+          <span class="card-size-value" id="cardSizeValue">100%</span>
+          <button type="button" class="card-size-btn" id="increaseCardSizeBtn" aria-label="Increase card size">+</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="board-top-panel">
+      <div class="board-message-card">
+        <div class="board-message-top">
+          <h2>Message Builder</h2>
+
+          <div class="board-top-controls">
+            <select id="boardLanguageSelect" class="board-select">
+              <option value="en-US">English</option>
+              <option value="ms-MY">Bahasa Melayu</option>
+            </select>
+
+            <button type="button" class="board-action-btn light-btn" id="backspaceMessageBtn">Backspace</button>
+            <button type="button" class="board-action-btn light-btn" id="clearMessageBtn">Clear</button>
+            <button type="button" class="board-action-btn primary-btn" id="speakMessageBtn">Speak</button>
+          </div>
+        </div>
+
+        <div class="board-message-box" id="boardMessageBox">
+          Tap a card to build a sentence...
+        </div>
+      </div>
+    </section>
+
+    <section class="board-layout">
+      <aside class="board-sidebar">
+        <div class="board-side-card">
+          <h2>Content Type</h2>
+          <div class="board-tab-group">
+            <button type="button" class="board-tab-btn active-board-tab" data-type="phrases">Phrases</button>
+            <button type="button" class="board-tab-btn" data-type="vocabulary">Vocabulary</button>
+          </div>
+        </div>
+
+        <div class="board-side-card">
+          <h2>Categories</h2>
+          <div class="board-category-list" id="boardCategoryList"></div>
+        </div>
+      </aside>
+
+      <section class="board-content-panel">
+        <div class="board-content-header">
+          <h2 id="boardContentTitle">Urgent Needs</h2>
+          <p id="boardContentCount">0 cards</p>
+        </div>
+
+        <div class="board-cards-grid" id="boardCardsGrid"></div>
+      </section>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Echozy. All rights reserved.</p>
+  </footer>
+
+  <script src="../../assets/js/board.js"></script>
+</body>
+</html>

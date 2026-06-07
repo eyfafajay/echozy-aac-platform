@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Healthcare Provider Sign In | Echozy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700;800&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+</head>
+<body>
+  <!-- Navbar -->
+  <header class="navbar">
+    <div class="logo-section">
+      <img src="../../assets/images/logo.png" alt="Echozy Logo" class="logo" />
+      <span class="logo-text">Echozy</span>
+    </div>
+
+    <div class="top-nav-shape">
+      <nav class="nav-links">
+        <a href="../../index.html">Home</a>
+        <a href="../about.html">About Us</a>
+        <a href="../choose-role.html" class="sign-in-link">Sign In</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Provider Sign In Main -->
+  <main class="auth-page">
+    <section class="auth-section">
+      <div class="auth-card">
+        <div class="auth-card-left">
+          <p class="auth-label">HEALTHCARE PROVIDER PORTAL</p>
+          <h1>Welcome Back</h1>
+          <p class="auth-subtext">
+            Sign in to monitor patient progress, manage communication content,
+            and support rehabilitation through Echozy.
+          </p>
+
+          <form class="auth-form" id="providerSignInForm">
+            <div class="form-group">
+              <label for="provider-email">Email</label>
+              <input type="email" id="provider-email" placeholder="Enter your email" />
+            </div>
+
+            <div class="form-group">
+              <label for="provider-password">Password</label>
+              <div class="password-input-wrapper">
+                <input type="password" id="provider-password" placeholder="Enter your password" />
+                <button
+                  type="button"
+                  class="password-toggle-btn"
+                  data-target="provider-password"
+                  aria-label="Show password"
+                ></button>
+              </div>
+            </div>
+
+            <div class="auth-row">
+              <label class="remember-me">
+                <input type="checkbox" />
+                <span>Remember Me</span>
+              </label>
+
+              <!-- Change this back for contact admin -->
+              <a href="#" class="auth-link">Contact Admin</a>
+            </div>
+
+            <button type="submit" class="auth-submit-btn">Sign In</button>
+          </form>
+
+          <p class="auth-bottom-text">
+            Don’t have an account?
+            <a href="provider-signup.html">Sign Up</a>
+          </p>
+
+          <a href="../choose-role.html" class="back-link">← Back to Role Selection</a>
+        </div>
+
+        <div class="auth-card-right">
+          <div class="auth-image-card provider-image-card">
+            <img src="../../assets/images/provider/hero5.png" alt="Healthcare provider support" />
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Echozy. All rights reserved.</p>
+  </footer>
+
+  <script src="../../assets/js/auth-flow.js"></script>
+</body>
+</html>

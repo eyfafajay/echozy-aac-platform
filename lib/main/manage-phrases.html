@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manage Phrases | Echozy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700;800&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+</head>
+<body>
+  <header class="navbar">
+    <div class="logo-section">
+      <img src="../../assets/images/logo.png" alt="Echozy Logo" class="logo" />
+      <span class="logo-text">Echozy</span>
+    </div>
+
+    <div class="top-nav-shape">
+      <nav class="nav-links">
+        <a href="dashboard.html" id="dashboardNavLink">Dashboard</a>
+        <a href="manage-patients.html" id="managePatientsNavLink">Manage Patients</a>
+        <a href="settings-caregiver.html" id="settingsNavLink">Settings</a>
+        <a href="../../index.html" class="sign-in-link" id="logoutNavLink">Logout</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="manage-phrases-page">
+    <section class="manage-phrases-header">
+      <div>
+        <p class="dashboard-label">PHRASE MANAGEMENT</p>
+        <h1 id="managePhrasesHeading">Manage Phrases</h1>
+        <p class="dashboard-subtext" id="managePhrasesSubtext">
+          Organize communication phrases by category for the selected patient.
+        </p>
+      </div>
+
+      <div class="manage-action-group">
+        <a href="patient-dashboard.html" class="secondary-btn" id="backToPatientDashboardFromPhrases">← Back to Patient</a>
+        <button class="add-patient-btn" type="button" id="openAddPhraseModal">+ Add Phrase</button>
+      </div>
+    </section>
+
+    <section class="manage-phrases-layout">
+      <aside class="phrase-categories-panel">
+        <h2>Main Categories</h2>
+
+        <button class="phrase-category-item urgent active-category" data-category="urgent">
+          <span>Urgent Needs</span>
+          <small>0 Cards</small>
+        </button>
+
+        <button class="phrase-category-item basic" data-category="basic">
+          <span>Basic Responses</span>
+          <small>0 Cards</small>
+        </button>
+
+        <button class="phrase-category-item feelings" data-category="feelings">
+          <span>Feelings & Emotions</span>
+          <small>0 Cards</small>
+        </button>
+
+        <button class="phrase-category-item physical" data-category="physical">
+          <span>Physical Condition</span>
+          <small>0 Cards</small>
+        </button>
+
+        <button class="phrase-category-item daily" data-category="daily">
+          <span>Daily Needs</span>
+          <small>0 Cards</small>
+        </button>
+
+        <button class="phrase-category-item social" data-category="social">
+          <span>People & Social Communication</span>
+          <small>0 Cards</small>
+        </button>
+
+        <button class="phrase-category-item rehab" data-category="rehab">
+          <span>Rehabilitation</span>
+          <small>0 Cards</small>
+        </button>
+
+        <button class="phrase-category-item activities" data-category="activities">
+          <span>Activities & Preferences</span>
+          <small>0 Cards</small>
+        </button>
+      </aside>
+
+      <section class="phrase-list-panel panel-urgent" id="phraseListPanel">
+        <div id="phraseCardsContainer"></div>
+      </section>
+    </section>
+
+    <div class="modal-overlay" id="addPhraseModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div>
+            <p class="dashboard-label">NEW PHRASE</p>
+            <h2>Add Phrase</h2>
+          </div>
+          <button class="modal-close-btn" type="button" id="closeAddPhraseModal">&times;</button>
+        </div>
+
+        <form class="modal-form" id="addPhraseForm">
+          <div class="modal-form-grid">
+            <div class="form-group">
+              <label for="phrase-id">Phrase ID <span class="locked-field-hint">🔒 Auto generated</span></label>
+              <input type="text" id="phrase-id" placeholder="Auto generated" readonly />
+            </div>
+
+            <div class="form-group">
+              <label for="phrase-text-en">Phrase Text (English)</label>
+              <input type="text" id="phrase-text-en" placeholder="Enter phrase text in English" />
+            </div>
+
+            <div class="form-group">
+              <label for="phrase-text-ms">Phrase Text (Bahasa Melayu)</label>
+              <input type="text" id="phrase-text-ms" placeholder="Enter phrase text in Bahasa Melayu" />
+            </div>
+
+            <div class="form-group">
+              <label for="phrase-category">Category</label>
+              <select id="phrase-category">
+                <option value="">Select category</option>
+                <option>Urgent Needs</option>
+                <option>Basic Responses</option>
+                <option>Feelings & Emotions</option>
+                <option>Physical Condition</option>
+                <option>Daily Needs</option>
+                <option>People & Social Communication</option>
+                <option>Rehabilitation</option>
+                <option>Activities & Preferences</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="phrase-image">Phrase Image</label>
+              <input type="file" id="phrase-image" accept="image/*" />
+            </div>
+          </div>
+
+          <div class="modal-action-row">
+            <button type="button" class="modal-cancel-btn" id="cancelAddPhraseModal">Cancel</button>
+            <button type="submit" class="auth-submit-btn">Save Phrase</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="editPhraseModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div>
+            <p class="dashboard-label">PHRASE DETAILS</p>
+            <h2>Edit Phrase</h2>
+          </div>
+          <button class="modal-close-btn" type="button" id="closeEditPhraseModal">&times;</button>
+        </div>
+
+        <form class="modal-form">
+          <div class="modal-form-grid">
+            <div class="form-group">
+              <label for="edit-phrase-id">Phrase ID <span class="locked-field-hint">🔒 Cannot edit</span></label>
+              <input type="text" id="edit-phrase-id" value="" readonly />
+            </div>
+
+            <div class="form-group">
+              <label for="edit-phrase-text-en">Phrase Text (English)</label>
+              <input type="text" id="edit-phrase-text-en" />
+            </div>
+
+            <div class="form-group">
+              <label for="edit-phrase-text-ms">Phrase Text (Bahasa Melayu)</label>
+              <input type="text" id="edit-phrase-text-ms" />
+            </div>
+
+            <div class="form-group">
+              <label for="edit-phrase-category">Category</label>
+              <select id="edit-phrase-category">
+                <option value="">Select category</option>
+                <option>Urgent Needs</option>
+                <option>Basic Responses</option>
+                <option>Feelings & Emotions</option>
+                <option>Physical Condition</option>
+                <option>Daily Needs</option>
+                <option>People & Social Communication</option>
+                <option>Rehabilitation</option>
+                <option>Activities & Preferences</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="edit-phrase-image">Change Phrase Image</label>
+              <input type="file" id="edit-phrase-image" accept="image/*" />
+            </div>
+          </div>
+
+          <div class="modal-action-row">
+            <button type="button" class="modal-cancel-btn" id="cancelEditPhraseModal">Cancel</button>
+            <button type="submit" class="auth-submit-btn">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="deletePhraseModal">
+      <div class="delete-modal-card">
+        <div class="delete-modal-icon">🗑️</div>
+        <h2>Delete Phrase?</h2>
+        <p>
+          Are you sure you want to delete this phrase?
+          This action cannot be undone.
+        </p>
+
+        <div class="modal-action-row">
+          <button type="button" class="modal-cancel-btn" id="cancelDeletePhraseModal">Cancel</button>
+          <button type="button" class="delete-confirm-btn" id="confirmDeletePhraseModal">Delete Phrase</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Echozy. All rights reserved.</p>
+  </footer>
+
+  <script src="../../assets/js/manage-phrases.js"></script>
+</body>
+</html>

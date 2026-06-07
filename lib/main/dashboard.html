@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard | Echozy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700;800&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+</head>
+<body>
+  <header class="navbar">
+    <div class="logo-section">
+      <img src="../../assets/images/logo.png" alt="Echozy Logo" class="logo" />
+      <span class="logo-text">Echozy</span>
+    </div>
+
+    <div class="top-nav-shape">
+      <nav class="nav-links">
+        <a href="dashboard.html" class="active" id="dashboardNavLink">Dashboard</a>
+        <a href="manage-patients.html" id="managePatientsNavLink">Manage Patients</a>
+        <a href="settings-caregiver.html" id="settingsNavLink">Settings</a>
+        <a href="../../index.html" class="sign-in-link" id="logoutNavLink">Logout</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="dashboard-page">
+    <section class="dashboard-header">
+      <div>
+        <p class="dashboard-label" id="dashboardRoleLabel">ECHOZY DASHBOARD</p>
+        <h1 id="dashboardGreeting">Hello, User</h1>
+        <p class="dashboard-subtext" id="dashboardSubtext">
+          Monitor your patients, track session activity, and manage communication support from one place.
+        </p>
+      </div>
+    </section>
+
+    <section class="dashboard-summary">
+      <div class="summary-card">
+        <div class="summary-icon">👥</div>
+        <div>
+          <h2>Total Patients</h2>
+          <p class="summary-number" id="dashboardTotalPatients">0</p>
+        </div>
+      </div>
+
+      <div class="summary-card">
+        <div class="summary-icon">📅</div>
+        <div>
+          <h2>Total Sessions</h2>
+          <p class="summary-number" id="dashboardTotalSessions">0</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="dashboard-log-section">
+      <div class="dashboard-log-card">
+        <div class="dashboard-log-header">
+          <div>
+            <h2>Detailed Activity Log</h2>
+            <p>Shows patient session entry and exit records</p>
+          </div>
+        </div>
+
+        <div class="table-wrapper dashboard-log-table-wrapper">
+          <table class="activity-table">
+            <thead>
+              <tr>
+                <th>Patient Name</th>
+                <th>View</th>
+                <th>Patient ID</th>
+                <th>Session Date</th>
+                <th>Enter Time</th>
+                <th>Quit Time</th>
+                <th>Duration</th>
+              </tr>
+            </thead>
+            <tbody id="dashboardActivityLogBody">
+              <tr>
+                <td colspan="7">No session activity yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Echozy. All rights reserved.</p>
+  </footer>
+
+  <script src="../../assets/js/dashboard-flow.js"></script>
+</body>
+</html>

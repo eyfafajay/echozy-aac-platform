@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Patient Dashboard | Echozy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700;800&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+</head>
+<body>
+  <header class="navbar">
+    <div class="logo-section">
+      <img src="../../assets/images/logo.png" alt="Echozy Logo" class="logo" />
+      <span class="logo-text">Echozy</span>
+    </div>
+
+    <div class="top-nav-shape">
+      <nav class="nav-links">
+        <a href="dashboard.html" id="dashboardNavLink">Dashboard</a>
+        <a href="manage-patients.html" class="active" id="managePatientsNavLink">Manage Patients</a>
+        <a href="settings-caregiver.html" id="settingsNavLink">Settings</a>
+        <a href="../../index.html" class="sign-in-link" id="logoutNavLink">Logout</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="patient-dashboard-page">
+    <section class="patient-dashboard-header">
+      <div>
+        <p class="dashboard-label">PATIENT DASHBOARD</p>
+        <h1 id="patientNameHeading">Patient Dashboard</h1>
+        <p class="dashboard-subtext" id="patientDashboardSubtext">
+          View patient profile, monitor communication activity, and access communication analytics.
+        </p>
+      </div>
+      <a href="manage-patients.html" class="secondary-btn" id="backToPatientsBtn">← Back to Patients</a>
+    </section>
+
+    <section class="patient-dashboard-layout">
+      <div class="patient-profile-card">
+        <div class="patient-profile-top">
+          <div class="patient-profile-avatar-wrapper">
+            <img src="../../assets/images/avatars/male.png" alt="Patient Avatar" class="patient-profile-avatar" id="patientProfileAvatar" />
+          </div>
+
+          <div class="patient-profile-main">
+            <h2 id="patientProfileName">Patient Name</h2>
+            <p class="patient-profile-id" id="patientProfileId">Patient ID: —</p>
+            <p class="patient-profile-meta" id="patientProfileMeta">No patient data available</p>
+            <span class="profile-status-badge inactive-badge" id="patientProfileStatus">Unavailable</span>
+          </div>
+        </div>
+
+        <div class="patient-action-row">
+          <button class="profile-action-btn" type="button" id="openEditPatientModal">Edit Details</button>
+          <button class="profile-action-btn delete-btn" type="button" id="openDeletePatientModal">Delete Record</button>
+          <a href="../patients/frequently-used.html" class="enter-session-btn enter-session-inline" id="enterSessionBtn">Enter Session</a>
+        </div>
+
+        <div class="patient-stats-grid">
+          <div class="patient-stat-card">
+            <span>Total Sessions</span>
+            <strong id="totalSessionsCount">0</strong>
+          </div>
+          <div class="patient-stat-card">
+            <span>Frequently Used</span>
+            <strong id="frequentPhrasesCount">0</strong>
+          </div>
+          <div class="patient-stat-card">
+            <span>Total Phrases</span>
+            <strong id="totalPhrasesCount">0</strong>
+          </div>
+          <div class="patient-stat-card">
+            <span>Total Vocabulary</span>
+            <strong id="totalVocabularyCount">0</strong>
+          </div>
+          <div class="patient-stat-card full-width">
+            <span>Last Session</span>
+            <strong id="lastSessionText">No session yet</strong>
+          </div>
+        </div>
+
+        <div class="patient-management-links">
+          <a href="manage-phrases.html" class="secondary-btn" id="managePhrasesBtn">Manage Phrases</a>
+          <a href="manage-vocabulary.html" class="secondary-btn" id="manageVocabularyBtn">Manage Vocabulary</a>
+        </div>
+      </div>
+
+      <div class="patient-analytics-panel">
+        <div class="analytics-card">
+          <div class="analytics-card-header">
+            <h2>Frequently Used</h2>
+            <p>Top clicked patient phrases and vocabulary</p>
+          </div>
+
+          <div class="table-wrapper frequently-used-table-wrapper">
+            <table class="activity-table patient-usage-table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Text</th>
+                  <th>Category</th>
+                  <th>Frequency</th>
+                </tr>
+              </thead>
+              <tbody id="frequentlyUsedPhrasesTableBody">
+                <tr>
+                  <td colspan="4">No frequently used data yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="progress-grid">
+          <div class="progress-card">
+            <h3>Phrases Progress</h3>
+            <div class="progress-circle" id="phrasesProgressCircle">
+              <span id="phrasesProgressPercent">0%</span>
+            </div>
+            <div class="progress-legend">
+              <p><span class="legend-dot legend-green"></span> Practiced Phrases</p>
+              <p><span class="legend-dot legend-red"></span> Unpracticed Phrases</p>
+            </div>
+          </div>
+
+          <div class="progress-card">
+            <h3>Vocabulary Progress</h3>
+            <div class="progress-circle" id="vocabularyProgressCircle">
+              <span id="vocabularyProgressPercent">0%</span>
+            </div>
+            <div class="progress-legend">
+              <p><span class="legend-dot legend-green"></span> Practiced Vocabulary</p>
+              <p><span class="legend-dot legend-red"></span> Unpracticed Vocabulary</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="modal-overlay" id="editPatientModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div>
+            <p class="dashboard-label">PATIENT DETAILS</p>
+            <h2>Edit Details</h2>
+          </div>
+          <button class="modal-close-btn" type="button" id="closeEditPatientModal">&times;</button>
+        </div>
+
+        <form class="modal-form" id="editPatientForm">
+          <div class="modal-form-grid">
+            <div class="form-group">
+              <label for="edit-patient-fullname">Full Name</label>
+              <input type="text" id="edit-patient-fullname" value="" />
+            </div>
+
+            <div class="form-group">
+              <label for="edit-patient-id">Patient ID <span class="locked-field-hint">🔒 Cannot edit</span></label>
+              <input type="text" id="edit-patient-id" value="" readonly />
+            </div>
+
+            <div class="form-group">
+              <label for="edit-patient-age">Age <span class="locked-field-hint">🔒 Auto calculated</span></label>
+              <input type="number" id="edit-patient-age" value="" readonly />
+            </div>
+
+            <div class="form-group">
+              <label for="edit-patient-gender">Gender</label>
+              <select id="edit-patient-gender">
+                <option>Male</option>
+                <option>Female</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="edit-patient-status">Status</label>
+              <select id="edit-patient-status">
+                <option selected>Active</option>
+                <option>Inactive</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="edit-patient-dob">Date of Birth</label>
+              <input type="date" id="edit-patient-dob" />
+            </div>
+
+            <div class="form-group">
+              <label for="edit-patient-language">Preferred Language</label>
+              <select id="edit-patient-language">
+                <option value="English">English</option>
+                <option value="Bahasa Melayu">Bahasa Melayu</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="edit-patient-notes">Notes</label>
+            <textarea id="edit-patient-notes" rows="4" placeholder="Update patient notes"></textarea>
+          </div>
+
+          <div class="modal-action-row">
+            <button type="button" class="modal-cancel-btn" id="cancelEditPatientModal">Cancel</button>
+            <button type="submit" class="auth-submit-btn">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="deletePatientModal">
+      <div class="delete-modal-card">
+        <div class="delete-modal-icon">🗑️</div>
+        <h2>Delete Record?</h2>
+        <p>
+          Are you sure you want to delete this patient record?
+          This action cannot be undone.
+        </p>
+
+        <div class="modal-action-row">
+          <button type="button" class="modal-cancel-btn" id="cancelDeletePatientModal">Cancel</button>
+          <button type="button" class="delete-confirm-btn" id="confirmDeletePatientModal">Delete Record</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Echozy. All rights reserved.</p>
+  </footer>
+
+  <script src="../../assets/js/patient-dashboard.js"></script>
+</body>
+</html>
