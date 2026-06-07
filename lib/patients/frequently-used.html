@@ -71,24 +71,26 @@
       </div>
     </section>
 
-    <section class="frequently-used-sections">
-      <div class="frequently-used-panel">
-        <div class="practice-content-header">
-          <h2>Frequently Used Phrases</h2>
-          <p id="frequentlyUsedPhraseCountLabel">0 cards</p>
+    <section class="phrases-vocabulary-tabs frequently-used-tabs">
+      <button type="button" class="board-tab-btn active-board-tab" data-frequent-type="phrases">
+        Phrases
+      </button>
+      <button type="button" class="board-tab-btn" data-frequent-type="vocabulary">
+        Vocabulary
+      </button>
+    </section>
+
+    <section class="frequently-used-layout">
+      <aside class="frequently-used-categories-panel" id="frequentlyUsedCategoryList"></aside>
+
+      <section class="frequently-used-content-panel">
+        <div class="practice-content-header" id="frequentlyUsedContentHeader">
+          <h2 id="frequentlyUsedContentTitle">Frequently Used Phrases</h2>
+          <p id="frequentlyUsedContentCount">0 cards</p>
         </div>
 
-        <div class="frequently-used-cards-grid" id="frequentlyUsedPhrasesGrid"></div>
-      </div>
-
-      <div class="frequently-used-panel">
-        <div class="practice-content-header">
-          <h2>Frequently Used Vocabulary</h2>
-          <p id="frequentlyUsedVocabularyCountLabel">0 cards</p>
-        </div>
-
-        <div class="frequently-used-cards-grid" id="frequentlyUsedVocabularyGrid"></div>
-      </div>
+        <div class="frequently-used-cards-grid" id="frequentlyUsedCardsGrid"></div>
+      </section>
     </section>
   </main>
 
