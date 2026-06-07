@@ -521,7 +521,7 @@ function renderPatientData(patient) {
     enterSessionBtn.href =
       `../patients/frequently-used.html?patient=${encodeURIComponent(patient.id)}` +
       `&name=${encodeURIComponent(patient.name)}` +
-      `&status=${encodeURIComponent(patient.status)}` +
+      `&status=${encodeURIComponent('Active')}` +
       `&language=${encodeURIComponent(patient.preferredLanguage || 'English')}` +
       `&role=${encodeURIComponent(userRole)}` +
       `&userId=${encodeURIComponent(userId)}` +
