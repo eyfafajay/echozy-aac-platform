@@ -10,7 +10,7 @@ Echozy is a web-based multilingual Augmentative and Alternative Communication pl
 - Caregiver phrase customization
 - Healthcare provider dashboard
 - Patient usage analytics
-- Firebase integration
+- Supabase integration
 - OpenAI TTS integration
 
 ## Technologies Used
