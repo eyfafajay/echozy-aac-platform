@@ -3134,6 +3134,37 @@ main {
   color: #1f4e8c;
 }
 
+.practice-card-shell {
+  position: relative;
+  cursor: pointer;
+}
+
+.practice-result-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(31, 78, 140, 0.18);
+  z-index: 3;
+  cursor: pointer;
+  padding: 0;
+}
+
+.practice-result-btn.neutral-result {
+  background: #d9e5f2;
+}
+
+.practice-result-btn.success-result {
+  background: #2eb872;
+}
+
+.practice-result-btn.unsuccessful-result {
+  background: #e35656;
+}
+
 .practice-tab-section {
   margin-bottom: 20px;
 }

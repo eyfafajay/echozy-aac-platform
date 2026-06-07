@@ -267,6 +267,58 @@ function recordPracticeCardClick(itemId) {
   saveStoredPracticeClickCounts(allPracticeClicks);
 }
 
+function getStoredPracticeResults() {
+  return JSON.parse(localStorage.getItem('echozyPracticeResults') || '{}');
+}
+
+function saveStoredPracticeResults(data) {
+  localStorage.setItem('echozyPracticeResults', JSON.stringify(data));
+}
+
+function getPatientPracticeResults() {
+  const allResults = getStoredPracticeResults();
+
+  if (!allResults[patientId]) {
+    allResults[patientId] = {
+      phrases: {},
+      vocabulary: {}
+    };
+    saveStoredPracticeResults(allResults);
+  }
+
+  return allResults[patientId];
+}
+
+function getPracticeResultForItem(itemId) {
+  const patientResults = getPatientPracticeResults();
+  const targetResults = currentType === 'phrases'
+    ? patientResults.phrases
+    : patientResults.vocabulary;
+
+  return targetResults[itemId] || 'neutral';
+}
+
+function togglePracticeResult(itemId) {
+  const allResults = getStoredPracticeResults();
+  const patientResults = getPatientPracticeResults();
+  const targetResults = currentType === 'phrases'
+    ? patientResults.phrases
+    : patientResults.vocabulary;
+
+  const currentResult = targetResults[itemId] || 'neutral';
+
+  if (currentResult === 'neutral') {
+    targetResults[itemId] = 'success';
+  } else if (currentResult === 'success') {
+    targetResults[itemId] = 'unsuccessful';
+  } else {
+    targetResults[itemId] = 'neutral';
+  }
+
+  allResults[patientId] = patientResults;
+  saveStoredPracticeResults(allResults);
+}
+
 function getStoredSessionLogs() {
   return JSON.parse(localStorage.getItem('echozySessionLogs') || '{}');
 }
@@ -445,6 +497,18 @@ function renderCategories() {
   });
 }
 
+function getResultButtonClass(resultState) {
+  if (resultState === 'success') return 'practice-result-btn success-result';
+  if (resultState === 'unsuccessful') return 'practice-result-btn unsuccessful-result';
+  return 'practice-result-btn neutral-result';
+}
+
+function getResultButtonLabel(resultState) {
+  if (resultState === 'success') return 'Successful';
+  if (resultState === 'unsuccessful') return 'Not Successful';
+  return 'Set Result';
+}
+
 function renderPracticeCards() {
   const labels = getCurrentLabels();
   const data = getCurrentData();
@@ -474,14 +538,24 @@ function renderPracticeCards() {
     ? items.map((item) => {
         const practiceCount = practiceClicks[item.id] || 0;
         const displayText = getTextByLanguage(item, resolvedLanguage);
+        const resultState = getPracticeResultForItem(item.id);
 
         return `
-          <button
-            type="button"
-            class="phrases-vocabulary-card ${themeClass}"
+          <div
+            class="phrases-vocabulary-card ${themeClass} practice-card-shell"
             data-item-id="${item.id}"
             data-item-text="${displayText}"
+            role="button"
+            tabindex="0"
           >
+            <button
+              type="button"
+              class="${getResultButtonClass(resultState)}"
+              data-result-item-id="${item.id}"
+              aria-label="${getResultButtonLabel(resultState)}"
+              title="${getResultButtonLabel(resultState)}"
+            ></button>
+
             <div class="phrases-vocabulary-card-image">
               <img src="${item.image || DEFAULT_IMAGE}" alt="${displayText}" />
             </div>
@@ -489,12 +563,12 @@ function renderPracticeCards() {
               <span>${displayText}</span>
               <small>Practiced ${practiceCount} time${practiceCount === 1 ? '' : 's'}</small>
             </div>
-          </button>
+          </div>
         `;
       }).join('')
     : `<div class="board-empty-state">No cards available in this category yet.</div>`;
 
-  const cards = practiceCardsGrid.querySelectorAll('[data-item-id]');
+  const cards = practiceCardsGrid.querySelectorAll('.practice-card-shell');
   cards.forEach((card) => {
     card.addEventListener('click', () => {
       const itemId = card.dataset.itemId;
@@ -504,6 +578,31 @@ function renderPracticeCards() {
       updatePracticeSummary();
       renderPracticeCards();
       speakCardWithOpenAITTS(itemText);
+    });
+
+    card.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+
+        const itemId = card.dataset.itemId;
+        const itemText = card.dataset.itemText;
+
+        recordPracticeCardClick(itemId);
+        updatePracticeSummary();
+        renderPracticeCards();
+        speakCardWithOpenAITTS(itemText);
+      }
+    });
+  });
+
+  const resultButtons = practiceCardsGrid.querySelectorAll('[data-result-item-id]');
+  resultButtons.forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+
+      const itemId = button.dataset.resultItemId;
+      togglePracticeResult(itemId);
+      renderPracticeCards();
     });
   });
 }
