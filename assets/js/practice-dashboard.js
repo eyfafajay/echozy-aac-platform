@@ -38,6 +38,7 @@ const practiceTabButtons = document.querySelectorAll('[data-practice-type]');
 
 let currentType = 'phrases';
 let currentCategory = 'urgent';
+let currentAudio = null;
 
 const DEFAULT_IMAGE = '../../assets/images/placeholders/defaultPV.png';
 
@@ -69,6 +70,10 @@ function getResolvedPatientLanguage() {
   return patientLanguage || storedPatients[patientId]?.preferredLanguage || 'English';
 }
 
+function getTtsLanguageCode() {
+  return getResolvedPatientLanguage() === 'Bahasa Melayu' ? 'ms-MY' : 'en-US';
+}
+
 function getTextByLanguage(item, language) {
   if (!item) return '';
 
@@ -77,6 +82,53 @@ function getTextByLanguage(item, language) {
   }
 
   return item.textEn || item.text || item.textMs || '';
+}
+
+async function speakCardWithOpenAITTS(text) {
+  if (!text) return;
+
+  try {
+    const response = await fetch('http://localhost:3000/tts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        text,
+        language: getTtsLanguageCode()
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to generate speech.');
+    }
+
+    const audioBlob = await response.blob();
+    const audioUrl = URL.createObjectURL(audioBlob);
+
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+    }
+
+    currentAudio = new Audio(audioUrl);
+
+    currentAudio.onended = () => {
+      URL.revokeObjectURL(audioUrl);
+      currentAudio = null;
+    };
+
+    currentAudio.onerror = () => {
+      URL.revokeObjectURL(audioUrl);
+      currentAudio = null;
+      console.error('Unable to play generated card audio.');
+    };
+
+    await currentAudio.play();
+  } catch (error) {
+    console.error('Practice Dashboard card TTS error:', error);
+  }
 }
 
 function getStoredCardScale() {
@@ -380,6 +432,7 @@ function renderPracticeCards() {
             type="button"
             class="practice-card ${isPracticed ? 'practiced-card' : ''}"
             data-item-id="${item.id}"
+            data-item-text="${displayText}"
           >
             <div class="practice-card-image">
               <img src="${item.image || DEFAULT_IMAGE}" alt="${displayText}" />
@@ -396,7 +449,11 @@ function renderPracticeCards() {
   const cards = practiceCardsGrid.querySelectorAll('[data-item-id]');
   cards.forEach((card) => {
     card.addEventListener('click', () => {
-      togglePracticeItem(card.dataset.itemId);
+      const itemId = card.dataset.itemId;
+      const itemText = card.dataset.itemText;
+
+      togglePracticeItem(itemId);
+      speakCardWithOpenAITTS(itemText);
     });
   });
 }
