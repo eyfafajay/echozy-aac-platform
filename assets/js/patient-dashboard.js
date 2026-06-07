@@ -41,8 +41,8 @@ const editPatientId = document.getElementById('edit-patient-id');
 const editPatientAge = document.getElementById('edit-patient-age');
 const editPatientDob = document.getElementById('edit-patient-dob');
 const editPatientGender = document.getElementById('edit-patient-gender');
-const editPatientStatus = document.getElementById('edit-patient-status');
 const editPatientLanguage = document.getElementById('edit-patient-language');
+const editPatientNotes = document.getElementById('edit-patient-notes');
 
 const totalSessionsCount = document.getElementById('totalSessionsCount');
 const frequentPhrasesCount = document.getElementById('frequentPhrasesCount');
@@ -120,6 +120,19 @@ function getStoredSessionLogs() {
 
 function saveStoredSessionLogs(data) {
   localStorage.setItem('echozySessionLogs', JSON.stringify(data));
+}
+
+function updatePatientStatusInStorage(patientId, nextStatus) {
+  const patients = getStoredPatients();
+
+  if (!patients[patientId]) {
+    return null;
+  }
+
+  patients[patientId].status = nextStatus;
+  saveStoredPatients(patients);
+
+  return patients[patientId];
 }
 
 function recordSessionEntry(patientId) {
@@ -378,12 +391,12 @@ function renderPatientData(patient) {
     editPatientGender.value = patient.gender;
   }
 
-  if (editPatientStatus) {
-    editPatientStatus.value = patient.status;
-  }
-
   if (editPatientLanguage) {
     editPatientLanguage.value = patient.preferredLanguage || 'English';
+  }
+
+  if (editPatientNotes) {
+    editPatientNotes.value = patient.notes || '';
   }
 
   const allPhrases = getStoredPhrases();
@@ -515,7 +528,12 @@ function renderPatientData(patient) {
       `&user=${encodeURIComponent(userName)}`;
 
     enterSessionBtn.onclick = () => {
-      recordSessionEntry(patient.id);
+      const updatedPatient = updatePatientStatusInStorage(patient.id, 'Active');
+
+      if (updatedPatient) {
+        currentPatient = updatedPatient;
+        recordSessionEntry(patient.id);
+      }
     };
   }
 }
@@ -575,8 +593,9 @@ if (editPatientForm) {
       gender: editPatientGender.value,
       age: editPatientAge.value.trim(),
       dob: editPatientDob.value,
-      status: editPatientStatus.value,
+      status: currentPatient ? currentPatient.status : 'Inactive',
       preferredLanguage: editPatientLanguage ? editPatientLanguage.value : 'English',
+      notes: editPatientNotes ? editPatientNotes.value.trim() : '',
       avatar: getAvatarByGender(editPatientGender.value),
       ownerId: userId,
       roleOwner: userRole
