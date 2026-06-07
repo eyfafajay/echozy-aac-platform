@@ -24,10 +24,18 @@ const decreaseCardSizeBtn = document.getElementById('decreaseCardSizeBtn');
 const increaseCardSizeBtn = document.getElementById('increaseCardSizeBtn');
 const cardSizeValue = document.getElementById('cardSizeValue');
 
-const practicedPhrasesPercent = document.getElementById('practicedPhrasesPercent');
-const practicedVocabularyPercent = document.getElementById('practicedVocabularyPercent');
-const practicedPhrasesCount = document.getElementById('practicedPhrasesCount');
-const practicedVocabularyCount = document.getElementById('practicedVocabularyCount');
+const phrasesProgressPercent = document.getElementById('phrasesProgressPercent');
+const vocabularyProgressPercent = document.getElementById('vocabularyProgressPercent');
+
+const phrasesProgressSuccessBar = document.getElementById('phrasesProgressSuccessBar');
+const phrasesProgressUnsuccessfulBar = document.getElementById('phrasesProgressUnsuccessfulBar');
+const vocabularyProgressSuccessBar = document.getElementById('vocabularyProgressSuccessBar');
+const vocabularyProgressUnsuccessfulBar = document.getElementById('vocabularyProgressUnsuccessfulBar');
+
+const phrasesSuccessCount = document.getElementById('phrasesSuccessCount');
+const phrasesUnsuccessfulCount = document.getElementById('phrasesUnsuccessfulCount');
+const vocabularySuccessCount = document.getElementById('vocabularySuccessCount');
+const vocabularyUnsuccessfulCount = document.getElementById('vocabularyUnsuccessfulCount');
 
 const practiceCategoryList = document.getElementById('practiceCategoryList');
 const practiceCardsGrid = document.getElementById('practiceCardsGrid');
@@ -425,8 +433,24 @@ function countPracticedItems(clicksObject, validIds) {
   }).length;
 }
 
+function countResultItems(resultsObject, validIds, targetStatus) {
+  return Object.entries(resultsObject || {}).filter(([itemId, status]) => {
+    return validIds.includes(itemId) && status === targetStatus;
+  }).length;
+}
+
+function setProgressBarWidths(successBar, unsuccessfulBar, successWidth, unsuccessfulWidth) {
+  if (successBar) {
+    successBar.style.width = `${successWidth}%`;
+  }
+
+  if (unsuccessfulBar) {
+    unsuccessfulBar.style.width = `${unsuccessfulWidth}%`;
+  }
+}
+
 function updatePracticeSummary() {
-  const patientPracticeClicks = getPatientPracticeClickCounts();
+  const patientPracticeResults = getPatientPracticeResults();
   const phraseData = getPatientPhrases();
   const vocabularyData = getPatientVocabulary();
 
@@ -436,35 +460,91 @@ function updatePracticeSummary() {
   const phraseIds = getAllIds(phraseData);
   const vocabularyIds = getAllIds(vocabularyData);
 
-  const practicedPhraseItems = countPracticedItems(patientPracticeClicks.phrases, phraseIds);
-  const practicedVocabularyItems = countPracticedItems(patientPracticeClicks.vocabulary, vocabularyIds);
+  const successfulPhrases = countResultItems(
+    patientPracticeResults.phrases,
+    phraseIds,
+    'success'
+  );
 
-  const totalPhrasePracticeClicks = sumClickCounts(patientPracticeClicks.phrases);
-  const totalVocabularyPracticeClicks = sumClickCounts(patientPracticeClicks.vocabulary);
+  const unsuccessfulPhrases = countResultItems(
+    patientPracticeResults.phrases,
+    phraseIds,
+    'unsuccessful'
+  );
 
-  const phrasePercent = totalPhraseItems
-    ? Math.round((practicedPhraseItems / totalPhraseItems) * 100)
+  const successfulVocabulary = countResultItems(
+    patientPracticeResults.vocabulary,
+    vocabularyIds,
+    'success'
+  );
+
+  const unsuccessfulVocabulary = countResultItems(
+    patientPracticeResults.vocabulary,
+    vocabularyIds,
+    'unsuccessful'
+  );
+
+  const phrasesProgressValue = totalPhraseItems
+    ? Math.round((successfulPhrases / totalPhraseItems) * 100)
     : 0;
 
-  const vocabularyPercent = totalVocabularyItems
-    ? Math.round((practicedVocabularyItems / totalVocabularyItems) * 100)
+  const vocabularyProgressValue = totalVocabularyItems
+    ? Math.round((successfulVocabulary / totalVocabularyItems) * 100)
     : 0;
 
-  if (practicedPhrasesPercent) {
-    practicedPhrasesPercent.textContent = `${phrasePercent}%`;
+  const phraseSuccessWidth = totalPhraseItems
+    ? (successfulPhrases / totalPhraseItems) * 100
+    : 0;
+
+  const phraseUnsuccessfulWidth = totalPhraseItems
+    ? (unsuccessfulPhrases / totalPhraseItems) * 100
+    : 0;
+
+  const vocabularySuccessWidth = totalVocabularyItems
+    ? (successfulVocabulary / totalVocabularyItems) * 100
+    : 0;
+
+  const vocabularyUnsuccessfulWidth = totalVocabularyItems
+    ? (unsuccessfulVocabulary / totalVocabularyItems) * 100
+    : 0;
+
+  if (phrasesProgressPercent) {
+    phrasesProgressPercent.textContent = `${phrasesProgressValue}%`;
   }
 
-  if (practicedVocabularyPercent) {
-    practicedVocabularyPercent.textContent = `${vocabularyPercent}%`;
+  if (vocabularyProgressPercent) {
+    vocabularyProgressPercent.textContent = `${vocabularyProgressValue}%`;
   }
 
-  if (practicedPhrasesCount) {
-    practicedPhrasesCount.textContent = totalPhrasePracticeClicks;
+  if (phrasesSuccessCount) {
+    phrasesSuccessCount.textContent = successfulPhrases;
   }
 
-  if (practicedVocabularyCount) {
-    practicedVocabularyCount.textContent = totalVocabularyPracticeClicks;
+  if (phrasesUnsuccessfulCount) {
+    phrasesUnsuccessfulCount.textContent = unsuccessfulPhrases;
   }
+
+  if (vocabularySuccessCount) {
+    vocabularySuccessCount.textContent = successfulVocabulary;
+  }
+
+  if (vocabularyUnsuccessfulCount) {
+    vocabularyUnsuccessfulCount.textContent = unsuccessfulVocabulary;
+  }
+
+  setProgressBarWidths(
+    phrasesProgressSuccessBar,
+    phrasesProgressUnsuccessfulBar,
+    phraseSuccessWidth,
+    phraseUnsuccessfulWidth
+  );
+
+  setProgressBarWidths(
+    vocabularyProgressSuccessBar,
+    vocabularyProgressUnsuccessfulBar,
+    vocabularySuccessWidth,
+    vocabularyUnsuccessfulWidth
+  );
 }
 
 function renderCategories() {
@@ -602,6 +682,7 @@ function renderPracticeCards() {
 
       const itemId = button.dataset.resultItemId;
       togglePracticeResult(itemId);
+      updatePracticeSummary();
       renderPracticeCards();
     });
   });
