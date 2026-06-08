@@ -1,4 +1,12 @@
-# Echozy
+<p align="center">
+  <img src="assets/images/logo.png" alt="Echozy Logo" width="120">
+</p>
+
+<h1 align="center">Echozy</h1>
+
+<p align="center">
+  A web-based multilingual Augmentative and Alternative Communication platform for stroke patients.
+</p>
 
 Echozy is a web-based multilingual Augmentative and Alternative Communication (AAC) platform designed to support stroke patients with communication impairments. The system helps patients express their needs, emotions, and daily messages through visual phrase and vocabulary cards, message building, and text-to-speech output.
 
