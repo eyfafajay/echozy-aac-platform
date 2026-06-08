@@ -571,7 +571,7 @@ function renderPatientData(patient) {
 
   if (enterSessionBtn) {
     enterSessionBtn.href =
-      `../patients/frequently-used.html?patient=${encodeURIComponent(patient.id)}` +
+      `../patients/board.html?patient=${encodeURIComponent(patient.id)}` +
       `&name=${encodeURIComponent(patient.name)}` +
       `&status=${encodeURIComponent('Active')}` +
       `&language=${encodeURIComponent(patient.preferredLanguage || 'English')}` +
