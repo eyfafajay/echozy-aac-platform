@@ -264,6 +264,7 @@ if (providerSignUpForm) {
   });
 }
 
+
 /* PROVIDER SIGN IN */
 const providerSignInForm = document.getElementById('providerSignInForm');
 
@@ -308,5 +309,44 @@ if (providerSignInForm) {
     } catch (error) {
       showError(error);
     }
+  });
+}
+
+
+/* ADMIN SIGN IN */
+const adminSignInForm = document.getElementById('adminSignInForm');
+
+if (adminSignInForm) {
+  adminSignInForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+
+    const email = document.getElementById('admin-email')?.value.trim();
+    const password = document.getElementById('admin-password')?.value;
+
+    if (!email || !password) {
+      alert('Please enter your admin email and password.');
+      return;
+    }
+
+    const defaultAdmin = {
+      userId: 'ADM0001',
+      fullName: 'Echozy Admin',
+      email: 'admin@echozy.com',
+      password: 'admin123',
+      role: 'admin',
+      staffId: 'ADM0001'
+    };
+
+    if (
+      email.toLowerCase() !== defaultAdmin.email.toLowerCase() ||
+      password !== defaultAdmin.password
+    ) {
+      alert('Invalid admin email or password.');
+      return;
+    }
+
+    storeSession(defaultAdmin);
+
+    window.location.href = '../admin/admin-dashboard.html';
   });
 }
