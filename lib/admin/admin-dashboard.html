@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard | Echozy</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700;800&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+</head>
+<body>
+  <header class="navbar">
+    <div class="logo-section">
+      <img src="../../assets/images/logo.png" alt="Echozy Logo" class="logo" />
+      <span class="logo-text">Echozy Admin</span>
+    </div>
+
+    <div class="top-nav-shape">
+      <nav class="nav-links">
+        <a href="admin-dashboard.html" class="active">Dashboard</a>
+        <a href="admin-manage-phrases.html">Phrases</a>
+        <a href="admin-manage-vocabulary.html">Vocabulary</a>
+        <button class="logout-btn" id="logoutBtn">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="admin-dashboard-page">
+    <section class="admin-dashboard-hero">
+      <div>
+        <p class="dashboard-label">ADMIN DASHBOARD</p>
+        <h1>Manage Echozy Global Content</h1>
+        <p class="dashboard-subtext">
+          Control the default phrases and vocabulary that will be synced across all patients.
+          Caregivers and healthcare providers can still add personalized content for individual patients.
+        </p>
+      </div>
+    </section>
+
+    <section class="admin-summary-grid">
+      <a href="admin-manage-phrases.html" class="admin-summary-card">
+        <div class="summary-icon">💬</div>
+        <div>
+          <h2>Manage Default Phrases</h2>
+          <p>Add, edit, or delete global phrases for all patients.</p>
+          <span class="admin-card-btn">Open Phrases</span>
+        </div>
+      </a>
+
+      <a href="admin-manage-vocabulary.html" class="admin-summary-card">
+        <div class="summary-icon">📚</div>
+        <div>
+          <h2>Manage Default Vocabulary</h2>
+          <p>Add, edit, or delete global vocabulary for all patients.</p>
+          <span class="admin-card-btn">Open Vocabulary</span>
+        </div>
+      </a>
+
+      <div class="admin-info-card">
+        <h2>How Admin Sync Works</h2>
+        <p>
+          Content added by Admin becomes the default content for Echozy. Existing patients and newly
+          added patients can receive this global content, while caregivers and healthcare providers
+          may add extra personalized content separately.
+        </p>
+      </div>
+
+      <div class="admin-info-card">
+        <h2>Content Ownership</h2>
+        <p>
+          Admin content is shared globally. Caregiver or provider content is saved under a selected
+          patient only, so personal phrases will not affect other patients.
+        </p>
+      </div>
+    </section>
+
+    <section class="dashboard-log-section">
+      <div class="dashboard-log-card">
+        <div class="dashboard-log-header">
+          <h2>Admin Quick Notes</h2>
+          <p>Use this section as a simple reminder of what the admin account controls.</p>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="activity-table">
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th>Admin Control</th>
+                <th>Patient Impact</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Default Phrases</td>
+                <td>Add, edit, delete phrase categories and phrases</td>
+                <td>Available to all patients</td>
+              </tr>
+              <tr>
+                <td>Default Vocabulary</td>
+                <td>Add, edit, delete vocabulary categories and words</td>
+                <td>Available to all patients</td>
+              </tr>
+              <tr>
+                <td>Personalized Content</td>
+                <td>Not directly managed here</td>
+                <td>Managed per patient by caregiver or provider</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Echozy. All rights reserved.</p>
+  </footer>
+
+  <script>
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('echozySession');
+        window.location.href = '../auth/admin-signin.html';
+      });
+    }
+  </script>
+</body>
+</html>
