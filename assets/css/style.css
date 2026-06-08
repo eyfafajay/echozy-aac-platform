@@ -3936,3 +3936,162 @@ main {
     grid-template-columns: 1fr;
   }
 }
+
+
+
+/* ADMIN DASHBOARD PAGE */
+.admin-dashboard-page {
+  padding: clamp(24px, 4vw, 40px) clamp(16px, 5vw, 60px) clamp(32px, 6vw, 70px);
+}
+
+.admin-dashboard-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: clamp(18px, 3vw, 28px);
+  margin-bottom: clamp(24px, 4vw, 34px);
+  flex-wrap: wrap;
+}
+
+.admin-dashboard-hero h1 {
+  font-family: 'Montserrat', sans-serif;
+  font-size: clamp(30px, 4.5vw, 52px);
+  color: #1f4e8c;
+  margin-bottom: 12px;
+}
+
+.admin-profile-card {
+  background: white;
+  border-radius: clamp(16px, 2vw, 24px);
+  padding: clamp(18px, 3vw, 26px);
+  box-shadow: 0 8px 22px rgba(31, 78, 140, 0.1);
+  min-width: 280px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.admin-avatar {
+  width: 68px;
+  height: 68px;
+  border-radius: 20px;
+  background: #edf6fd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34px;
+}
+
+.admin-profile-card h2 {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 22px;
+  color: #1f4e8c;
+  margin-bottom: 6px;
+}
+
+.admin-profile-card p {
+  font-family: 'Poppins', sans-serif;
+  color: #5a6f82;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.admin-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  gap: clamp(16px, 2vw, 24px);
+  margin-bottom: clamp(24px, 4vw, 32px);
+}
+
+.admin-summary-card,
+.admin-info-card {
+  background: white;
+  border-radius: clamp(16px, 2vw, 24px);
+  padding: clamp(18px, 3vw, 28px);
+  box-shadow: 0 8px 22px rgba(31, 78, 140, 0.1);
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.22s ease;
+}
+
+.admin-summary-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.admin-summary-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(31, 78, 140, 0.16);
+}
+
+.admin-summary-card h2,
+.admin-info-card h2 {
+  font-family: 'Montserrat', sans-serif;
+  color: #1f4e8c;
+  font-size: clamp(20px, 2vw, 26px);
+  margin-bottom: 10px;
+}
+
+.admin-summary-card p,
+.admin-info-card p {
+  font-family: 'Inter', sans-serif;
+  color: #34495e;
+  line-height: 1.7;
+  font-size: 15px;
+  margin-bottom: 18px;
+}
+
+.admin-card-btn {
+  display: inline-block;
+  background: #1f4e8c;
+  color: white;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.admin-summary-card:hover .admin-card-btn {
+  background: #163d73;
+  box-shadow: 0 8px 18px rgba(31, 78, 140, 0.22);
+}
+
+.logout-btn {
+  border: none;
+  background: #c24848;
+  color: white;
+  padding: clamp(8px, 1vw, 10px) clamp(18px, 2vw, 24px);
+  border-radius: 999px;
+  font-family: 'Poppins', sans-serif;
+  font-size: clamp(14px, 1.3vw, 16px);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logout-btn:hover {
+  background: #a83838;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(194, 72, 72, 0.22);
+}
+
+@media (max-width: 900px) {
+  .admin-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-summary-card {
+    flex-direction: column;
+  }
+}
+
+.admin-content-subtext {
+  margin-top: 4px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  color: #5a6f82;
+  line-height: 1.4;
+}
+
