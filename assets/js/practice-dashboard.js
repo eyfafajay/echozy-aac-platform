@@ -50,10 +50,36 @@ let currentCategory = 'urgent';
 let currentAudio = null;
 
 const DEFAULT_IMAGE = '../../assets/images/placeholders/defaultPV.png';
+const ADMIN_PHRASES_STORAGE_KEY = 'echozyAdminPhrases';
+const ADMIN_VOCABULARY_STORAGE_KEY = 'echozyAdminVocabulary';
 
 const MIN_CARD_SCALE = 80;
 const MAX_CARD_SCALE = 150;
 const CARD_SCALE_STEP = 10;
+
+function createEmptyPhraseData() {
+  return {
+    urgent: [],
+    basic: [],
+    feelings: [],
+    physical: [],
+    daily: [],
+    social: [],
+    rehab: [],
+    activities: []
+  };
+}
+
+function createEmptyVocabularyData() {
+  return {
+    people: [],
+    food: [],
+    places: [],
+    body: [],
+    feelings: [],
+    actions: []
+  };
+}
 
 function getStoredPatients() {
   return JSON.parse(localStorage.getItem('echozyPatients') || '{}');
@@ -232,6 +258,22 @@ function getStoredVocabulary() {
   return JSON.parse(localStorage.getItem('echozyVocabulary') || '{}');
 }
 
+function getStoredAdminPhrases() {
+  const stored = JSON.parse(localStorage.getItem(ADMIN_PHRASES_STORAGE_KEY) || '{}');
+  return {
+    ...createEmptyPhraseData(),
+    ...stored
+  };
+}
+
+function getStoredAdminVocabulary() {
+  const stored = JSON.parse(localStorage.getItem(ADMIN_VOCABULARY_STORAGE_KEY) || '{}');
+  return {
+    ...createEmptyVocabularyData(),
+    ...stored
+  };
+}
+
 function getStoredPracticeClickCounts() {
   return JSON.parse(localStorage.getItem('echozyPracticeClickCounts') || '{}');
 }
@@ -357,12 +399,34 @@ function recordQuitSession() {
 
 function getPatientPhrases() {
   const allPhrases = getStoredPhrases();
-  return allPhrases[patientId] || {};
+  const patientPhrases = allPhrases[patientId] || createEmptyPhraseData();
+  const adminPhrases = getStoredAdminPhrases();
+  const merged = createEmptyPhraseData();
+
+  Object.keys(merged).forEach((category) => {
+    merged[category] = [
+      ...(adminPhrases[category] || []),
+      ...(patientPhrases[category] || [])
+    ];
+  });
+
+  return merged;
 }
 
 function getPatientVocabulary() {
   const allVocabulary = getStoredVocabulary();
-  return allVocabulary[patientId] || {};
+  const patientVocabulary = allVocabulary[patientId] || createEmptyVocabularyData();
+  const adminVocabulary = getStoredAdminVocabulary();
+  const merged = createEmptyVocabularyData();
+
+  Object.keys(merged).forEach((category) => {
+    merged[category] = [
+      ...(adminVocabulary[category] || []),
+      ...(patientVocabulary[category] || [])
+    ];
+  });
+
+  return merged;
 }
 
 const phraseCategoryLabels = {
