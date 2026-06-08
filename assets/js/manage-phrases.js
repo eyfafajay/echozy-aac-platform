@@ -52,6 +52,7 @@ const phraseUserName =
   'User';
 
 const DEFAULT_PHRASE_IMAGE = '../../assets/images/placeholders/defaultPV.png';
+const ADMIN_PHRASES_STORAGE_KEY = 'echozyAdminPhrases';
 
 let currentPhraseCategory = 'urgent';
 let phraseToDelete = null;
@@ -127,6 +128,14 @@ function saveStoredPhrases(data) {
   localStorage.setItem('echozyPhrases', JSON.stringify(data));
 }
 
+function getStoredAdminPhrases() {
+  const stored = JSON.parse(localStorage.getItem(ADMIN_PHRASES_STORAGE_KEY) || '{}');
+  return {
+    ...createEmptyPhraseData(),
+    ...stored
+  };
+}
+
 function getPatientPhrasesFromLocal() {
   const allPhrases = getStoredPhrases();
   return allPhrases[phrasePatientId] || createEmptyPhraseData();
@@ -136,6 +145,28 @@ function syncPatientPhrasesToLocal(patientPhrases) {
   const allPhrases = getStoredPhrases();
   allPhrases[phrasePatientId] = patientPhrases;
   saveStoredPhrases(allPhrases);
+}
+
+function getMergedPatientPhrases() {
+  const adminPhrases = getStoredAdminPhrases();
+  const patientPhrases = getPatientPhrasesFromLocal();
+  const merged = createEmptyPhraseData();
+
+  Object.keys(merged).forEach((category) => {
+    const adminItems = (adminPhrases[category] || []).map((phrase) => ({
+      ...phrase,
+      source: 'admin'
+    }));
+
+    const patientItems = (patientPhrases[category] || []).map((phrase) => ({
+      ...phrase,
+      source: 'personal'
+    }));
+
+    merged[category] = [...adminItems, ...patientItems];
+  });
+
+  return merged;
 }
 
 function generateNextPhraseId() {
@@ -185,11 +216,11 @@ const categoryLabelMap = {
 };
 
 function updatePhraseCategoryCounts() {
-  const patientPhrases = getPatientPhrasesFromLocal();
+  const mergedPhrases = getMergedPatientPhrases();
 
   phraseCategoryButtons.forEach((button) => {
     const category = button.dataset.category;
-    const count = (patientPhrases[category] || []).length;
+    const count = (mergedPhrases[category] || []).length;
     const countEl = button.querySelector('small');
 
     if (countEl) {
@@ -221,8 +252,8 @@ function renderPhraseCards(category) {
 
   currentPhraseCategory = category;
 
-  const patientPhrases = getPatientPhrasesFromLocal();
-  const phrases = patientPhrases[category] || [];
+  const mergedPhrases = getMergedPatientPhrases();
+  const phrases = mergedPhrases[category] || [];
   const cardClass = cardClassMap[category] || 'phrase-urgent';
 
   if (!phrases.length) {
@@ -232,34 +263,44 @@ function renderPhraseCards(category) {
     return;
   }
 
-  phraseCardsContainer.innerHTML = phrases.map((phrase, index) => `
-    <div class="phrase-card-item ${cardClass}">
-      <div class="phrase-card-left">
-        <div class="phrase-icon-circle">
-          <img src="${phrase.image || DEFAULT_PHRASE_IMAGE}" alt="${phrase.text || phrase.textEn || ''} phrase image" />
+  phraseCardsContainer.innerHTML = phrases.map((phrase, index) => {
+    const canEditPersonalPhrase = phrase.source === 'personal';
+
+    return `
+      <div class="phrase-card-item ${cardClass}">
+        <div class="phrase-card-left">
+          <div class="phrase-icon-circle">
+            <img src="${phrase.image || DEFAULT_PHRASE_IMAGE}" alt="${phrase.text || phrase.textEn || ''} phrase image" />
+          </div>
+          <span>${phrase.text || phrase.textEn || ''}</span>
         </div>
-        <span>${phrase.text || phrase.textEn || ''}</span>
+        <div class="phrase-card-actions">
+          ${
+            canEditPersonalPhrase
+              ? `
+                <button
+                  type="button"
+                  class="phrase-action-btn edit-action-btn openEditPhraseModal"
+                  data-category="${category}"
+                  data-index="${index}"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  class="phrase-action-btn delete-action-btn openDeletePhraseModal"
+                  data-category="${category}"
+                  data-index="${index}"
+                >
+                  Delete
+                </button>
+              `
+              : ''
+          }
+        </div>
       </div>
-      <div class="phrase-card-actions">
-        <button
-          type="button"
-          class="phrase-action-btn edit-action-btn openEditPhraseModal"
-          data-category="${category}"
-          data-index="${index}"
-        >
-          Edit
-        </button>
-        <button
-          type="button"
-          class="phrase-action-btn delete-action-btn openDeletePhraseModal"
-          data-category="${category}"
-          data-index="${index}"
-        >
-          Delete
-        </button>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
   bindPhraseActionButtons();
 }
@@ -272,12 +313,17 @@ function bindPhraseActionButtons() {
     button.addEventListener('click', () => {
       const category = button.dataset.category;
       const index = Number(button.dataset.index);
+      const mergedPhrases = getMergedPatientPhrases();
+      const phrase = mergedPhrases[category][index];
+
+      if (!phrase || phrase.source !== 'personal') return;
+
       const patientPhrases = getPatientPhrasesFromLocal();
-      const phrase = patientPhrases[category][index];
+      const personalIndex = patientPhrases[category].findIndex((item) => item.id === phrase.id);
 
-      if (!phrase) return;
+      if (personalIndex < 0) return;
 
-      phraseToEdit = { category, index };
+      phraseToEdit = { category, index: personalIndex };
 
       if (editPhraseIdInput) editPhraseIdInput.value = phrase.id || '';
       if (editPhraseTextEnInput) editPhraseTextEnInput.value = phrase.textEn || phrase.text || '';
@@ -297,9 +343,21 @@ function bindPhraseActionButtons() {
 
   openDeletePhraseButtons.forEach((button) => {
     button.addEventListener('click', () => {
+      const category = button.dataset.category;
+      const index = Number(button.dataset.index);
+      const mergedPhrases = getMergedPatientPhrases();
+      const phrase = mergedPhrases[category][index];
+
+      if (!phrase || phrase.source !== 'personal') return;
+
+      const patientPhrases = getPatientPhrasesFromLocal();
+      const personalIndex = patientPhrases[category].findIndex((item) => item.id === phrase.id);
+
+      if (personalIndex < 0) return;
+
       phraseToDelete = {
-        category: button.dataset.category,
-        index: Number(button.dataset.index)
+        category,
+        index: personalIndex
       };
 
       if (deletePhraseModal) {
