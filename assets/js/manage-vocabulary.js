@@ -52,6 +52,7 @@ const vocabularyUserName =
   'User';
 
 const DEFAULT_VOCABULARY_IMAGE = '../../assets/images/placeholders/defaultPV.png';
+const ADMIN_VOCABULARY_STORAGE_KEY = 'echozyAdminVocabulary';
 
 let currentVocabularyCategory = 'people';
 let vocabularyToDelete = null;
@@ -125,6 +126,14 @@ function saveStoredVocabulary(data) {
   localStorage.setItem('echozyVocabulary', JSON.stringify(data));
 }
 
+function getStoredAdminVocabulary() {
+  const stored = JSON.parse(localStorage.getItem(ADMIN_VOCABULARY_STORAGE_KEY) || '{}');
+  return {
+    ...createEmptyVocabularyData(),
+    ...stored
+  };
+}
+
 function getPatientVocabularyFromLocal() {
   const allVocabulary = getStoredVocabulary();
   return allVocabulary[vocabularyPatientId] || createEmptyVocabularyData();
@@ -134,6 +143,28 @@ function syncPatientVocabularyToLocal(patientVocabulary) {
   const allVocabulary = getStoredVocabulary();
   allVocabulary[vocabularyPatientId] = patientVocabulary;
   saveStoredVocabulary(allVocabulary);
+}
+
+function getMergedPatientVocabulary() {
+  const adminVocabulary = getStoredAdminVocabulary();
+  const patientVocabulary = getPatientVocabularyFromLocal();
+  const merged = createEmptyVocabularyData();
+
+  Object.keys(merged).forEach((category) => {
+    const adminItems = (adminVocabulary[category] || []).map((item) => ({
+      ...item,
+      source: 'admin'
+    }));
+
+    const patientItems = (patientVocabulary[category] || []).map((item) => ({
+      ...item,
+      source: 'personal'
+    }));
+
+    merged[category] = [...adminItems, ...patientItems];
+  });
+
+  return merged;
 }
 
 function generateNextVocabularyId() {
@@ -177,11 +208,11 @@ const vocabularyCategoryLabelMap = {
 };
 
 function updateVocabularyCategoryCounts() {
-  const patientVocabulary = getPatientVocabularyFromLocal();
+  const mergedVocabulary = getMergedPatientVocabulary();
 
   vocabularyCategoryButtons.forEach((button) => {
     const category = button.dataset.category;
-    const count = (patientVocabulary[category] || []).length;
+    const count = (mergedVocabulary[category] || []).length;
     const countEl = button.querySelector('small');
 
     if (countEl) {
@@ -213,8 +244,8 @@ function renderVocabularyCards(category) {
 
   currentVocabularyCategory = category;
 
-  const patientVocabulary = getPatientVocabularyFromLocal();
-  const vocabularyItems = patientVocabulary[category] || [];
+  const mergedVocabulary = getMergedPatientVocabulary();
+  const vocabularyItems = mergedVocabulary[category] || [];
   const cardClass = vocabularyCardClassMap[category] || 'vocabulary-people';
 
   if (!vocabularyItems.length) {
@@ -224,34 +255,44 @@ function renderVocabularyCards(category) {
     return;
   }
 
-  vocabularyCardsContainer.innerHTML = vocabularyItems.map((item, index) => `
-    <div class="vocabulary-card-item ${cardClass}">
-      <div class="vocabulary-card-left">
-        <div class="vocabulary-icon-circle">
-          <img src="${item.image || DEFAULT_VOCABULARY_IMAGE}" alt="${item.text || item.textEn || ''} vocabulary image" />
+  vocabularyCardsContainer.innerHTML = vocabularyItems.map((item, index) => {
+    const canEditPersonalVocabulary = item.source === 'personal';
+
+    return `
+      <div class="vocabulary-card-item ${cardClass}">
+        <div class="vocabulary-card-left">
+          <div class="vocabulary-icon-circle">
+            <img src="${item.image || DEFAULT_VOCABULARY_IMAGE}" alt="${item.text || item.textEn || ''} vocabulary image" />
+          </div>
+          <span>${item.text || item.textEn || ''}</span>
         </div>
-        <span>${item.text || item.textEn || ''}</span>
+        <div class="vocabulary-card-actions">
+          ${
+            canEditPersonalVocabulary
+              ? `
+                <button
+                  type="button"
+                  class="vocabulary-action-btn edit-vocabulary-btn openEditVocabularyModal"
+                  data-category="${category}"
+                  data-index="${index}"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  class="vocabulary-action-btn delete-vocabulary-btn openDeleteVocabularyModal"
+                  data-category="${category}"
+                  data-index="${index}"
+                >
+                  Delete
+                </button>
+              `
+              : ''
+          }
+        </div>
       </div>
-      <div class="vocabulary-card-actions">
-        <button
-          type="button"
-          class="vocabulary-action-btn edit-vocabulary-btn openEditVocabularyModal"
-          data-category="${category}"
-          data-index="${index}"
-        >
-          Edit
-        </button>
-        <button
-          type="button"
-          class="vocabulary-action-btn delete-vocabulary-btn openDeleteVocabularyModal"
-          data-category="${category}"
-          data-index="${index}"
-        >
-          Delete
-        </button>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
   bindVocabularyActionButtons();
 }
@@ -264,12 +305,17 @@ function bindVocabularyActionButtons() {
     button.addEventListener('click', () => {
       const category = button.dataset.category;
       const index = Number(button.dataset.index);
+      const mergedVocabulary = getMergedPatientVocabulary();
+      const item = mergedVocabulary[category][index];
+
+      if (!item || item.source !== 'personal') return;
+
       const patientVocabulary = getPatientVocabularyFromLocal();
-      const item = patientVocabulary[category][index];
+      const personalIndex = patientVocabulary[category].findIndex((entry) => entry.id === item.id);
 
-      if (!item) return;
+      if (personalIndex < 0) return;
 
-      vocabularyToEdit = { category, index };
+      vocabularyToEdit = { category, index: personalIndex };
 
       if (editVocabularyIdInput) editVocabularyIdInput.value = item.id || '';
       if (editVocabularyWordEnInput) editVocabularyWordEnInput.value = item.textEn || item.text || '';
@@ -289,9 +335,21 @@ function bindVocabularyActionButtons() {
 
   openDeleteVocabularyButtons.forEach((button) => {
     button.addEventListener('click', () => {
+      const category = button.dataset.category;
+      const index = Number(button.dataset.index);
+      const mergedVocabulary = getMergedPatientVocabulary();
+      const item = mergedVocabulary[category][index];
+
+      if (!item || item.source !== 'personal') return;
+
+      const patientVocabulary = getPatientVocabularyFromLocal();
+      const personalIndex = patientVocabulary[category].findIndex((entry) => entry.id === item.id);
+
+      if (personalIndex < 0) return;
+
       vocabularyToDelete = {
-        category: button.dataset.category,
-        index: Number(button.dataset.index)
+        category,
+        index: personalIndex
       };
 
       if (deleteVocabularyModal) {
