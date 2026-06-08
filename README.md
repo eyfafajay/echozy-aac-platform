@@ -431,12 +431,15 @@ Example structure:
 ```text
 Echozy/
 │
+├── README.md
 ├── index.html
-├── server.js
-├── package.json
-├── .env
 ├── .gitignore
-│
+├── server/
+│   ├── .env
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── server.js
+│   └── node_modules/
 ├── assets/
 │   ├── css/
 │   │   └── style.css
@@ -459,10 +462,13 @@ Echozy/
 │   │
 │   └── images/
 │       ├── logo.png
+│       ├── admin.png
 │       ├── avatars/
 │       ├── placeholders/
 │       ├── homepage/
-│       └── about/
+│       ├── about/
+│       ├── homepage/
+│       └── caregiver/
 │
 └── lib/
     ├── about.html
