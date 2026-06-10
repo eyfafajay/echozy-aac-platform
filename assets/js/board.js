@@ -57,8 +57,8 @@ const supabaseClient =
 
 const TTS_BASE_URL =
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:3000'
-    : 'https://echozy-aac-platform.vercel.app/';
+    ? 'http://localhost:54321/functions/v1'
+    : 'https://drvmfnlaxkcqbwoqjefu.supabase.co/functions/v1/tts';
 
 const MIN_CARD_SCALE = 80;
 const MAX_CARD_SCALE = 150;
@@ -637,7 +637,7 @@ if (speakMessageBtn) {
       speakMessageBtn.disabled = true;
       speakMessageBtn.textContent = 'Speaking...';
 
-      const response = await fetch(`${TTS_BASE_URL}/api/tts`, {
+      const response = await fetch(`${TTS_BASE_URL}/tts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
