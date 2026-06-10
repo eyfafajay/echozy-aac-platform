@@ -245,9 +245,16 @@ if (practiceDashboardNavLink) {
 if (backToPatientDashboardBtn) {
   backToPatientDashboardBtn.href = `../main/patient-dashboard.html?${sharedPatientQuery}`;
 
-  backToPatientDashboardBtn.addEventListener('click', () => {
-    recordQuitSession();
-    updatePatientStatusInStorage('Inactive');
+  backToPatientDashboardBtn.addEventListener('click', async (event) => {
+    event.preventDefault();
+
+    try {
+      await closePatientSession();
+    } catch (error) {
+      console.error('Quit session error:', error);
+    } finally {
+      window.location.href = backToPatientDashboardBtn.href;
+    }
   });
 }
 
@@ -705,3 +712,50 @@ async function initializePhrasesVocabularyPage() {
 initializePhrasesVocabularyPage().catch((error) => {
   console.error(error);
 });
+
+async function updatePatientStatusInSupabase(nextStatus) {
+  const { error } = await supabaseClient
+    .from('patients')
+    .update({ status: nextStatus })
+    .eq('id', patientId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function recordQuitSessionInSupabase() {
+  const { data: activeSession, error: fetchError } = await supabaseClient
+    .from('session_logs')
+    .select('id')
+    .eq('patient_id', patientId)
+    .is('quit_at', null)
+    .order('entered_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (fetchError) {
+    throw fetchError;
+  }
+
+  if (!activeSession) {
+    return;
+  }
+
+  const { error: updateError } = await supabaseClient
+    .from('session_logs')
+    .update({
+      quit_at: new Date().toISOString()
+    })
+    .eq('id', activeSession.id);
+
+  if (updateError) {
+    throw updateError;
+  }
+}
+
+async function closePatientSession() {
+  await recordQuitSessionInSupabase();
+  await updatePatientStatusInSupabase('Inactive');
+  updatePatientStatusInStorage('Inactive');
+}
