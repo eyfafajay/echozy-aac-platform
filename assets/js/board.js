@@ -471,6 +471,14 @@ function getBoardCategoryClass(category) {
   return boardCategoryColorClassMap[category] || 'board-theme-default';
 }
 
+async function getCurrentData() {
+  return currentType === 'phrases' ? await getPatientPhrases() : await getPatientVocabulary();
+}
+
+function getCurrentLabels() {
+  return currentType === 'phrases' ? phraseCategoryLabels : vocabularyCategoryLabels;
+}
+
 async function renderCategories() {
   const labels = getCurrentLabels();
   const data = await getCurrentData();
@@ -646,16 +654,16 @@ if (speakMessageBtn) {
         body: JSON.stringify({
           text: textToSpeak,
           language: selectedLanguage
-        })
-      });
+            })
+          });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to generate speech.');
-      }
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Failed to generate speech.');
+          }
 
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
+          const audioBlob = await response.blob();
+          const audioUrl = URL.createObjectURL(audioBlob);
 
       if (currentAudio) {
         currentAudio.pause();
