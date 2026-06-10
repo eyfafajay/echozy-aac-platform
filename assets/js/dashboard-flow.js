@@ -19,6 +19,19 @@ const dashboardTotalPatients = document.getElementById('dashboardTotalPatients')
 const dashboardTotalSessions = document.getElementById('dashboardTotalSessions');
 const dashboardActivityLogBody = document.getElementById('dashboardActivityLogBody');
 
+const SUPABASE_URL = 'https://drvmfnlaxkcqbwoqjefu.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4ugmgc1ktCaLEmwB1ttnbA_XjOCtqDm';
+
+const supabaseClient =
+  window.supabase && SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true
+        }
+      })
+    : null;
+
 const sharedQuery = new URLSearchParams({
   role,
   userId,
@@ -62,17 +75,17 @@ if (settingsNavLink) {
 }
 
 if (logoutNavLink) {
-  logoutNavLink.addEventListener('click', () => {
-    localStorage.removeItem('echozySession');
+  logoutNavLink.addEventListener('click', async () => {
+    try {
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      localStorage.removeItem('echozySession');
+    }
   });
-}
-
-function getStoredPatients() {
-  return JSON.parse(localStorage.getItem('echozyPatients') || '{}');
-}
-
-function getStoredSessionLogs() {
-  return JSON.parse(localStorage.getItem('echozySessionLogs') || '{}');
 }
 
 function formatDate(isoString) {
@@ -124,27 +137,54 @@ function formatDurationFromRecord(record) {
   return `${minutes} mins`;
 }
 
-function getPatientsForCurrentUser() {
-  const allPatients = getStoredPatients();
-  return Object.values(allPatients);
+async function getPatientsForCurrentUser() {
+  const { data, error } = await supabaseClient
+    .from('patients')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
 }
 
-function getSessionEntriesForCurrentUser() {
-  const allPatients = getStoredPatients();
-  const allSessionLogs = getStoredSessionLogs();
-
-  return Object.values(allPatients)
-    .flatMap((patient) => {
-      const patientLogs = allSessionLogs[patient.id] || [];
-
-      return patientLogs.map((log) => ({
-        patientName: patient.name,
+async function getSessionEntriesForCurrentUser() {
+  const patients = await getPatientsForCurrentUser();
+  const patientMap = new Map(
+    patients.map((patient) => [
+      patient.id,
+      {
+        patientName: patient.full_name,
         patientId: patient.id,
-        patientStatus: patient.status || 'Active',
-        patientLanguage: patient.preferredLanguage || 'English',
-        enteredAt: log.enteredAt || '',
-        quitAt: log.quitAt || ''
-      }));
+        patientStatus: patient.status || 'Inactive',
+        patientLanguage: patient.preferred_language || 'English'
+      }
+    ])
+  );
+
+  const { data, error } = await supabaseClient
+    .from('session_logs')
+    .select('*')
+    .order('entered_at', { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data || [])
+    .map((log) => {
+      const patientInfo = patientMap.get(log.patient_id);
+
+      return {
+        patientName: patientInfo?.patientName || 'Unknown Patient',
+        patientId: log.patient_id,
+        patientStatus: patientInfo?.patientStatus || 'Inactive',
+        patientLanguage: patientInfo?.patientLanguage || 'English',
+        enteredAt: log.entered_at || '',
+        quitAt: log.quit_at || ''
+      };
     })
     .sort((a, b) => {
       const aTime = a.quitAt || a.enteredAt || '';
@@ -153,9 +193,9 @@ function getSessionEntriesForCurrentUser() {
     });
 }
 
-function renderDashboardSummary() {
-  const patients = getPatientsForCurrentUser();
-  const sessionEntries = getSessionEntriesForCurrentUser();
+async function renderDashboardSummary() {
+  const patients = await getPatientsForCurrentUser();
+  const sessionEntries = await getSessionEntriesForCurrentUser();
 
   if (dashboardTotalPatients) {
     dashboardTotalPatients.textContent = patients.length;
@@ -166,10 +206,10 @@ function renderDashboardSummary() {
   }
 }
 
-function renderActivityLog() {
+async function renderActivityLog() {
   if (!dashboardActivityLogBody) return;
 
-  const sessionEntries = getSessionEntriesForCurrentUser();
+  const sessionEntries = await getSessionEntriesForCurrentUser();
 
   if (!sessionEntries.length) {
     dashboardActivityLogBody.innerHTML = `
@@ -214,5 +254,29 @@ function renderActivityLog() {
   }).join('');
 }
 
-renderDashboardSummary();
-renderActivityLog();
+async function initializeDashboard() {
+  try {
+    await renderDashboardSummary();
+    await renderActivityLog();
+  } catch (error) {
+    console.error(error);
+
+    if (dashboardTotalPatients) {
+      dashboardTotalPatients.textContent = '0';
+    }
+
+    if (dashboardTotalSessions) {
+      dashboardTotalSessions.textContent = '0';
+    }
+
+    if (dashboardActivityLogBody) {
+      dashboardActivityLogBody.innerHTML = `
+        <tr>
+          <td colspan="7">Unable to load dashboard activity right now.</td>
+        </tr>
+      `;
+    }
+  }
+}
+
+initializeDashboard();
