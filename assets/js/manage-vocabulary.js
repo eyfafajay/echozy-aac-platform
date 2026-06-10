@@ -3,7 +3,6 @@ const openAddVocabularyModal = document.getElementById('openAddVocabularyModal')
 const closeAddVocabularyModal = document.getElementById('closeAddVocabularyModal');
 const cancelAddVocabularyModal = document.getElementById('cancelAddVocabularyModal');
 const addVocabularyForm = document.getElementById('addVocabularyForm');
-const vocabularyIdInput = document.getElementById('vocabulary-id');
 const vocabularyWordEnInput = document.getElementById('vocabulary-word-en');
 const vocabularyWordMsInput = document.getElementById('vocabulary-word-ms');
 const vocabularyCategoryInput = document.getElementById('vocabulary-category');
@@ -13,7 +12,6 @@ const editVocabularyModal = document.getElementById('editVocabularyModal');
 const closeEditVocabularyModal = document.getElementById('closeEditVocabularyModal');
 const cancelEditVocabularyModal = document.getElementById('cancelEditVocabularyModal');
 const editVocabularyForm = editVocabularyModal ? editVocabularyModal.querySelector('form') : null;
-const editVocabularyIdInput = document.getElementById('edit-vocabulary-id');
 const editVocabularyWordEnInput = document.getElementById('edit-vocabulary-word-en');
 const editVocabularyWordMsInput = document.getElementById('edit-vocabulary-word-ms');
 const editVocabularyCategoryInput = document.getElementById('edit-vocabulary-category');
@@ -255,18 +253,6 @@ async function getMergedPatientVocabulary() {
   return merged;
 }
 
-async function generateNextVocabularyId() {
-  const patientVocabulary = await getAllPatientVocabulary();
-
-  const existingIds = patientVocabulary
-    .map((item) => item.id)
-    .filter((id) => /^VO\d{4}$/.test(id))
-    .map((id) => parseInt(id.replace('VO', ''), 10));
-
-  const nextNumber = existingIds.length ? Math.max(...existingIds) + 1 : 1;
-  return `VO${String(nextNumber).padStart(4, '0')}`;
-}
-
 async function uploadVocabularyImage(file, vocabularyId) {
   if (!file) {
     return '';
@@ -422,7 +408,6 @@ function bindVocabularyActionButtons() {
 
         vocabularyToEdit = { category, id: vocabularyId };
 
-        if (editVocabularyIdInput) editVocabularyIdInput.value = item.id || '';
         if (editVocabularyWordEnInput) editVocabularyWordEnInput.value = item.textEn || item.text || '';
         if (editVocabularyWordMsInput) editVocabularyWordMsInput.value = item.textMs || '';
         if (editVocabularyCategoryInput) {
@@ -471,10 +456,6 @@ if (openAddVocabularyModal && addVocabularyModal) {
         addVocabularyForm.reset();
       }
 
-      if (vocabularyIdInput) {
-        vocabularyIdInput.value = await generateNextVocabularyId();
-      }
-
       addVocabularyModal.classList.add('active');
     } catch (error) {
       showError(error);
@@ -498,15 +479,13 @@ if (addVocabularyForm) {
     try {
       const selectedCategory = vocabularyCategoryLabelMap[selectedCategoryLabel];
       const file = vocabularyImageInput && vocabularyImageInput.files ? vocabularyImageInput.files[0] : null;
-      const vocabularyId = vocabularyIdInput ? vocabularyIdInput.value : await generateNextVocabularyId();
       const uploadedImagePath = file
-        ? await uploadVocabularyImage(file, vocabularyId)
-        : null;
+      ? await uploadVocabularyImage(file, `vocabulary-${Date.now()}`)
+      : null;
 
       const { error } = await supabaseClient
         .from('patient_vocabulary')
         .insert({
-          id: vocabularyId,
           patient_id: vocabularyPatientId,
           category: selectedCategory,
           text_en: vocabularyWordEn,
@@ -523,7 +502,6 @@ if (addVocabularyForm) {
       await renderVocabularyCards(selectedCategory);
 
       addVocabularyForm.reset();
-      if (vocabularyIdInput) vocabularyIdInput.value = '';
       addVocabularyModal.classList.remove('active');
       alert('Vocabulary added successfully.');
     } catch (error) {

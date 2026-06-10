@@ -3,7 +3,6 @@ const openAddPhraseModal = document.getElementById('openAddPhraseModal');
 const closeAddPhraseModal = document.getElementById('closeAddPhraseModal');
 const cancelAddPhraseModal = document.getElementById('cancelAddPhraseModal');
 const addPhraseForm = document.getElementById('addPhraseForm');
-const phraseIdInput = document.getElementById('phrase-id');
 const phraseTextEnInput = document.getElementById('phrase-text-en');
 const phraseTextMsInput = document.getElementById('phrase-text-ms');
 const phraseCategoryInput = document.getElementById('phrase-category');
@@ -13,7 +12,6 @@ const editPhraseModal = document.getElementById('editPhraseModal');
 const closeEditPhraseModal = document.getElementById('closeEditPhraseModal');
 const cancelEditPhraseModal = document.getElementById('cancelEditPhraseModal');
 const editPhraseForm = editPhraseModal ? editPhraseModal.querySelector('form') : null;
-const editPhraseIdInput = document.getElementById('edit-phrase-id');
 const editPhraseTextEnInput = document.getElementById('edit-phrase-text-en');
 const editPhraseTextMsInput = document.getElementById('edit-phrase-text-ms');
 const editPhraseCategoryInput = document.getElementById('edit-phrase-category');
@@ -257,18 +255,6 @@ async function getMergedPatientPhrases() {
   return merged;
 }
 
-async function generateNextPhraseId() {
-  const patientPhrases = await getAllPatientPhrases();
-
-  const existingIds = patientPhrases
-    .map((phrase) => phrase.id)
-    .filter((id) => /^PH\d{4}$/.test(id))
-    .map((id) => parseInt(id.replace('PH', ''), 10));
-
-  const nextNumber = existingIds.length ? Math.max(...existingIds) + 1 : 1;
-  return `PH${String(nextNumber).padStart(4, '0')}`;
-}
-
 async function uploadPhraseImage(file, phraseId) {
   if (!file) {
     return '';
@@ -430,7 +416,6 @@ function bindPhraseActionButtons() {
 
         phraseToEdit = { category, id: phraseId };
 
-        if (editPhraseIdInput) editPhraseIdInput.value = phrase.id || '';
         if (editPhraseTextEnInput) editPhraseTextEnInput.value = phrase.textEn || phrase.text || '';
         if (editPhraseTextMsInput) editPhraseTextMsInput.value = phrase.textMs || '';
         if (editPhraseCategoryInput) {
@@ -479,10 +464,6 @@ if (openAddPhraseModal && addPhraseModal) {
         addPhraseForm.reset();
       }
 
-      if (phraseIdInput) {
-        phraseIdInput.value = await generateNextPhraseId();
-      }
-
       addPhraseModal.classList.add('active');
     } catch (error) {
       showError(error);
@@ -506,15 +487,13 @@ if (addPhraseForm) {
     try {
       const selectedCategory = categoryLabelMap[selectedCategoryLabel];
       const file = phraseImageInput && phraseImageInput.files ? phraseImageInput.files[0] : null;
-      const phraseId = phraseIdInput ? phraseIdInput.value : await generateNextPhraseId();
       const uploadedImagePath = file
-        ? await uploadPhraseImage(file, phraseId)
-        : null;
+      ? await uploadPhraseImage(file, `phrase-${Date.now()}`)
+      : null;
 
       const { error } = await supabaseClient
         .from('patient_phrases')
         .insert({
-          id: phraseId,
           patient_id: phrasePatientId,
           category: selectedCategory,
           text_en: phraseTextEn,
@@ -531,7 +510,6 @@ if (addPhraseForm) {
       await renderPhraseCards(selectedCategory);
 
       addPhraseForm.reset();
-      if (phraseIdInput) phraseIdInput.value = '';
       addPhraseModal.classList.remove('active');
       alert('Phrase added successfully.');
     } catch (error) {
