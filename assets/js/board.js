@@ -58,7 +58,7 @@ const supabaseClient =
 const TTS_BASE_URL =
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:54321/functions/v1'
-    : 'https://drvmfnlaxkcqbwoqjefu.supabase.co/functions/v1/tts';
+    : 'https://drvmfnlaxkcqbwoqjefu.supabase.co/functions/v1';
 
 const MIN_CARD_SCALE = 80;
 const MAX_CARD_SCALE = 150;
