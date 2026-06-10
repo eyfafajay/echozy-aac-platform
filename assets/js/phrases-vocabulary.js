@@ -53,6 +53,11 @@ const supabaseClient =
       })
     : null;
 
+const TTS_BASE_URL =
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:3000'
+    : 'https://echozy-aac-platform.vercel.app/';
+
 const MIN_CARD_SCALE = 80;
 const MAX_CARD_SCALE = 150;
 const CARD_SCALE_STEP = 10;
@@ -127,7 +132,7 @@ async function speakCardWithOpenAITTS(text) {
   if (!text) return;
 
   try {
-    const response = await fetch('http://localhost:3000/tts', {
+    const response = await fetch(`${TTS_BASE_URL}/api/tts`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
