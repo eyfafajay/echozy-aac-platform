@@ -750,7 +750,7 @@ async function renderPatientData(patient) {
   }
 
   if (enterSessionBtn) {
-    enterSessionBtn.href =
+    const sessionBoardUrl =
       `../patients/board.html?patient=${encodeURIComponent(currentPatient.id)}` +
       `&name=${encodeURIComponent(currentPatient.name)}` +
       `&status=${encodeURIComponent('Active')}` +
@@ -759,7 +759,11 @@ async function renderPatientData(patient) {
       `&userId=${encodeURIComponent(userId)}` +
       `&user=${encodeURIComponent(userName)}`;
 
-    enterSessionBtn.onclick = async () => {
+    enterSessionBtn.href = sessionBoardUrl;
+
+    enterSessionBtn.onclick = async (event) => {
+      event.preventDefault();
+
       try {
         const { error } = await supabaseClient
           .from('patients')
@@ -778,10 +782,11 @@ async function renderPatientData(patient) {
         }
 
         await recordSessionEntry(currentPatient.id);
+
+        window.location.href = sessionBoardUrl;
       } catch (error) {
         console.error(error);
         alert(error.message || 'Unable to start session.');
-        return false;
       }
     };
   }
