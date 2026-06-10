@@ -52,11 +52,26 @@ const phraseUserName =
   'User';
 
 const DEFAULT_PHRASE_IMAGE = '../../assets/images/placeholders/defaultPV.png';
-const ADMIN_PHRASES_STORAGE_KEY = 'echozyAdminPhrases';
+const PHRASE_BUCKET_NAME = 'phrase-images';
+
+const SUPABASE_URL = 'https://drvmfnlaxkcqbwoqjefu.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4ugmgc1ktCaLEmwB1ttnbA_XjOCtqDm';
+
+const supabaseClient =
+  window.supabase && SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true
+        }
+      })
+    : null;
 
 let currentPhraseCategory = 'urgent';
 let phraseToDelete = null;
 let phraseToEdit = null;
+let currentAuthUser = null;
+let currentUserProfile = null;
 
 if (managePhrasesHeading) {
   managePhrasesHeading.textContent = `Manage Phrases for ${phrasePatientName}`;
@@ -101,9 +116,48 @@ if (backToPatientDashboardFromPhrases) {
   backToPatientDashboardFromPhrases.href = `patient-dashboard.html?${backPatientQuery}`;
 }
 
+function showError(error) {
+  console.error(error);
+  alert(error?.message || 'Something went wrong. Please try again.');
+}
+
+async function loadCurrentUserProfile() {
+  if (!supabaseClient) {
+    throw new Error('Supabase client is not available. Please load the Supabase CDN before this script.');
+  }
+
+  const {
+    data: { user },
+    error: userError
+  } = await supabaseClient.auth.getUser();
+
+  if (userError) throw userError;
+  if (!user) throw new Error('No signed-in user found. Please sign in again.');
+
+  currentAuthUser = user;
+
+  const { data: profile, error: profileError } = await supabaseClient
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError) throw profileError;
+
+  currentUserProfile = profile;
+}
+
 if (logoutNavLink) {
-  logoutNavLink.addEventListener('click', () => {
-    localStorage.removeItem('echozySession');
+  logoutNavLink.addEventListener('click', async () => {
+    try {
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      localStorage.removeItem('echozySession');
+    }
   });
 }
 
@@ -120,66 +174,119 @@ function createEmptyPhraseData() {
   };
 }
 
-function getStoredPhrases() {
-  return JSON.parse(localStorage.getItem('echozyPhrases') || '{}');
+async function getAllAdminPhrases() {
+  const { data, error } = await supabaseClient
+    .from('admin_phrases')
+    .select('*')
+    .order('id', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
 }
 
-function saveStoredPhrases(data) {
-  localStorage.setItem('echozyPhrases', JSON.stringify(data));
+async function getAllPatientPhrases() {
+  const { data, error } = await supabaseClient
+    .from('patient_phrases')
+    .select('*')
+    .eq('patient_id', phrasePatientId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
 }
 
-function getStoredAdminPhrases() {
-  const stored = JSON.parse(localStorage.getItem(ADMIN_PHRASES_STORAGE_KEY) || '{}');
-  return {
-    ...createEmptyPhraseData(),
-    ...stored
-  };
+async function createPhraseSignedImageUrl(imagePath) {
+  if (!imagePath) {
+    return DEFAULT_PHRASE_IMAGE;
+  }
+
+  if (
+    imagePath.startsWith('http://') ||
+    imagePath.startsWith('https://') ||
+    imagePath.startsWith('data:')
+  ) {
+    return imagePath;
+  }
+
+  const { data, error } = await supabaseClient.storage
+    .from(PHRASE_BUCKET_NAME)
+    .createSignedUrl(imagePath, 60 * 60);
+
+  if (error) {
+    console.error(error);
+    return DEFAULT_PHRASE_IMAGE;
+  }
+
+  return data?.signedUrl || DEFAULT_PHRASE_IMAGE;
 }
 
-function getPatientPhrasesFromLocal() {
-  const allPhrases = getStoredPhrases();
-  return allPhrases[phrasePatientId] || createEmptyPhraseData();
-}
-
-function syncPatientPhrasesToLocal(patientPhrases) {
-  const allPhrases = getStoredPhrases();
-  allPhrases[phrasePatientId] = patientPhrases;
-  saveStoredPhrases(allPhrases);
-}
-
-function getMergedPatientPhrases() {
-  const adminPhrases = getStoredAdminPhrases();
-  const patientPhrases = getPatientPhrasesFromLocal();
+async function getMergedPatientPhrases() {
+  const adminPhrases = await getAllAdminPhrases();
+  const patientPhrases = await getAllPatientPhrases();
   const merged = createEmptyPhraseData();
 
-  Object.keys(merged).forEach((category) => {
-    const adminItems = (adminPhrases[category] || []).map((phrase) => ({
-      ...phrase,
+  for (const phrase of adminPhrases) {
+    if (!merged[phrase.category]) continue;
+
+    merged[phrase.category].push({
+      id: phrase.id,
+      text: phrase.text_en,
+      textEn: phrase.text_en,
+      textMs: phrase.text_ms,
+      image: phrase.image_path || '',
+      imageUrl: await createPhraseSignedImageUrl(phrase.image_path || ''),
       source: 'admin'
-    }));
+    });
+  }
 
-    const patientItems = (patientPhrases[category] || []).map((phrase) => ({
-      ...phrase,
+  for (const phrase of patientPhrases) {
+    if (!merged[phrase.category]) continue;
+
+    merged[phrase.category].push({
+      id: phrase.id,
+      dbId: phrase.id,
+      text: phrase.text_en,
+      textEn: phrase.text_en,
+      textMs: phrase.text_ms,
+      image: phrase.image_path || '',
+      imageUrl: await createPhraseSignedImageUrl(phrase.image_path || ''),
       source: 'personal'
-    }));
-
-    merged[category] = [...adminItems, ...patientItems];
-  });
+    });
+  }
 
   return merged;
 }
 
-function generateNextPhraseId() {
-  const patientPhrases = getPatientPhrasesFromLocal();
+async function generateNextPhraseId() {
+  const patientPhrases = await getAllPatientPhrases();
 
-  const existingIds = Object.values(patientPhrases)
-    .flat()
+  const existingIds = patientPhrases
     .map((phrase) => phrase.id)
     .filter((id) => /^PH\d{4}$/.test(id))
     .map((id) => parseInt(id.replace('PH', ''), 10));
 
   const nextNumber = existingIds.length ? Math.max(...existingIds) + 1 : 1;
   return `PH${String(nextNumber).padStart(4, '0')}`;
+}
+
+async function uploadPhraseImage(file, phraseId) {
+  if (!file) {
+    return '';
+  }
+
+  const safeFileName = file.name.replace(/\s+/g, '-');
+  const filePath = `patients/${phrasePatientId}/phrases/${phraseId}-${Date.now()}-${safeFileName}`;
+
+  const { data, error } = await supabaseClient.storage
+    .from(PHRASE_BUCKET_NAME)
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
+
+  if (error) throw error;
+
+  return data.path;
 }
 
 const panelClassMap = {
@@ -215,8 +322,8 @@ const categoryLabelMap = {
   'Activities & Preferences': 'activities'
 };
 
-function updatePhraseCategoryCounts() {
-  const mergedPhrases = getMergedPatientPhrases();
+async function updatePhraseCategoryCounts() {
+  const mergedPhrases = await getMergedPatientPhrases();
 
   phraseCategoryButtons.forEach((button) => {
     const category = button.dataset.category;
@@ -247,12 +354,12 @@ function setPanelCategory(selectedCategory) {
   }
 }
 
-function renderPhraseCards(category) {
+async function renderPhraseCards(category) {
   if (!phraseCardsContainer) return;
 
   currentPhraseCategory = category;
 
-  const mergedPhrases = getMergedPatientPhrases();
+  const mergedPhrases = await getMergedPatientPhrases();
   const phrases = mergedPhrases[category] || [];
   const cardClass = cardClassMap[category] || 'phrase-urgent';
 
@@ -270,7 +377,7 @@ function renderPhraseCards(category) {
       <div class="phrase-card-item ${cardClass}">
         <div class="phrase-card-left">
           <div class="phrase-icon-circle">
-            <img src="${phrase.image || DEFAULT_PHRASE_IMAGE}" alt="${phrase.text || phrase.textEn || ''} phrase image" />
+            <img src="${phrase.imageUrl || DEFAULT_PHRASE_IMAGE}" alt="${phrase.text || phrase.textEn || ''} phrase image" />
           </div>
           <span>${phrase.text || phrase.textEn || ''}</span>
         </div>
@@ -283,6 +390,7 @@ function renderPhraseCards(category) {
                   class="phrase-action-btn edit-action-btn openEditPhraseModal"
                   data-category="${category}"
                   data-index="${index}"
+                  data-id="${phrase.id}"
                 >
                   Edit
                 </button>
@@ -291,6 +399,7 @@ function renderPhraseCards(category) {
                   class="phrase-action-btn delete-action-btn openDeletePhraseModal"
                   data-category="${category}"
                   data-index="${index}"
+                  data-id="${phrase.id}"
                 >
                   Delete
                 </button>
@@ -310,54 +419,41 @@ function bindPhraseActionButtons() {
   const openDeletePhraseButtons = document.querySelectorAll('.openDeletePhraseModal');
 
   openEditPhraseButtons.forEach((button) => {
-    button.addEventListener('click', () => {
-      const category = button.dataset.category;
-      const index = Number(button.dataset.index);
-      const mergedPhrases = getMergedPatientPhrases();
-      const phrase = mergedPhrases[category][index];
+    button.addEventListener('click', async () => {
+      try {
+        const category = button.dataset.category;
+        const phraseId = button.dataset.id;
+        const mergedPhrases = await getMergedPatientPhrases();
+        const phrase = (mergedPhrases[category] || []).find((item) => item.id === phraseId && item.source === 'personal');
 
-      if (!phrase || phrase.source !== 'personal') return;
+        if (!phrase) return;
 
-      const patientPhrases = getPatientPhrasesFromLocal();
-      const personalIndex = patientPhrases[category].findIndex((item) => item.id === phrase.id);
+        phraseToEdit = { category, id: phraseId };
 
-      if (personalIndex < 0) return;
+        if (editPhraseIdInput) editPhraseIdInput.value = phrase.id || '';
+        if (editPhraseTextEnInput) editPhraseTextEnInput.value = phrase.textEn || phrase.text || '';
+        if (editPhraseTextMsInput) editPhraseTextMsInput.value = phrase.textMs || '';
+        if (editPhraseCategoryInput) {
+          const label = Object.keys(categoryLabelMap).find(
+            (key) => categoryLabelMap[key] === category
+          );
+          editPhraseCategoryInput.value = label || '';
+        }
 
-      phraseToEdit = { category, index: personalIndex };
-
-      if (editPhraseIdInput) editPhraseIdInput.value = phrase.id || '';
-      if (editPhraseTextEnInput) editPhraseTextEnInput.value = phrase.textEn || phrase.text || '';
-      if (editPhraseTextMsInput) editPhraseTextMsInput.value = phrase.textMs || '';
-      if (editPhraseCategoryInput) {
-        const label = Object.keys(categoryLabelMap).find(
-          (key) => categoryLabelMap[key] === category
-        );
-        editPhraseCategoryInput.value = label || '';
-      }
-
-      if (editPhraseModal) {
-        editPhraseModal.classList.add('active');
+        if (editPhraseModal) {
+          editPhraseModal.classList.add('active');
+        }
+      } catch (error) {
+        showError(error);
       }
     });
   });
 
   openDeletePhraseButtons.forEach((button) => {
     button.addEventListener('click', () => {
-      const category = button.dataset.category;
-      const index = Number(button.dataset.index);
-      const mergedPhrases = getMergedPatientPhrases();
-      const phrase = mergedPhrases[category][index];
-
-      if (!phrase || phrase.source !== 'personal') return;
-
-      const patientPhrases = getPatientPhrasesFromLocal();
-      const personalIndex = patientPhrases[category].findIndex((item) => item.id === phrase.id);
-
-      if (personalIndex < 0) return;
-
       phraseToDelete = {
-        category,
-        index: personalIndex
+        category: button.dataset.category,
+        id: button.dataset.id
       };
 
       if (deletePhraseModal) {
@@ -368,30 +464,34 @@ function bindPhraseActionButtons() {
 }
 
 phraseCategoryButtons.forEach((button) => {
-  button.addEventListener('click', () => {
+  button.addEventListener('click', async () => {
     const selectedCategory = button.dataset.category;
     setActiveCategoryButton(selectedCategory);
     setPanelCategory(selectedCategory);
-    renderPhraseCards(selectedCategory);
+    await renderPhraseCards(selectedCategory);
   });
 });
 
 if (openAddPhraseModal && addPhraseModal) {
-  openAddPhraseModal.addEventListener('click', () => {
-    if (addPhraseForm) {
-      addPhraseForm.reset();
-    }
+  openAddPhraseModal.addEventListener('click', async () => {
+    try {
+      if (addPhraseForm) {
+        addPhraseForm.reset();
+      }
 
-    if (phraseIdInput) {
-      phraseIdInput.value = generateNextPhraseId();
-    }
+      if (phraseIdInput) {
+        phraseIdInput.value = await generateNextPhraseId();
+      }
 
-    addPhraseModal.classList.add('active');
+      addPhraseModal.classList.add('active');
+    } catch (error) {
+      showError(error);
+    }
   });
 }
 
 if (addPhraseForm) {
-  addPhraseForm.addEventListener('submit', (event) => {
+  addPhraseForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
     const phraseTextEn = phraseTextEnInput ? phraseTextEnInput.value.trim() : '';
@@ -403,47 +503,45 @@ if (addPhraseForm) {
       return;
     }
 
-    const selectedCategory = categoryLabelMap[selectedCategoryLabel];
-    const patientPhrases = getPatientPhrasesFromLocal();
-    const file = phraseImageInput && phraseImageInput.files ? phraseImageInput.files[0] : null;
+    try {
+      const selectedCategory = categoryLabelMap[selectedCategoryLabel];
+      const file = phraseImageInput && phraseImageInput.files ? phraseImageInput.files[0] : null;
+      const phraseId = phraseIdInput ? phraseIdInput.value : await generateNextPhraseId();
+      const uploadedImagePath = file
+        ? await uploadPhraseImage(file, phraseId)
+        : null;
 
-    const savePhrase = (imagePath) => {
-      const newPhrase = {
-        id: phraseIdInput ? phraseIdInput.value : generateNextPhraseId(),
-        text: phraseTextEn,
-        textEn: phraseTextEn,
-        textMs: phraseTextMs,
-        image: imagePath || DEFAULT_PHRASE_IMAGE
-      };
+      const { error } = await supabaseClient
+        .from('patient_phrases')
+        .insert({
+          id: phraseId,
+          patient_id: phrasePatientId,
+          category: selectedCategory,
+          text_en: phraseTextEn,
+          text_ms: phraseTextMs,
+          image_path: uploadedImagePath,
+          created_by: currentAuthUser?.id || phraseUserId || null
+        });
 
-      patientPhrases[selectedCategory].push(newPhrase);
-      syncPatientPhrasesToLocal(patientPhrases);
+      if (error) throw error;
 
-      updatePhraseCategoryCounts();
+      await updatePhraseCategoryCounts();
       setActiveCategoryButton(selectedCategory);
       setPanelCategory(selectedCategory);
-      renderPhraseCards(selectedCategory);
+      await renderPhraseCards(selectedCategory);
 
       addPhraseForm.reset();
       if (phraseIdInput) phraseIdInput.value = '';
       addPhraseModal.classList.remove('active');
       alert('Phrase added successfully.');
-    };
-
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        savePhrase(reader.result);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      savePhrase(DEFAULT_PHRASE_IMAGE);
+    } catch (error) {
+      showError(error);
     }
   });
 }
 
 if (editPhraseForm) {
-  editPhraseForm.addEventListener('submit', (event) => {
+  editPhraseForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
     if (!phraseToEdit) return;
@@ -457,70 +555,68 @@ if (editPhraseForm) {
       return;
     }
 
-    const newCategory = categoryLabelMap[selectedCategoryLabel];
-    const patientPhrases = getPatientPhrasesFromLocal();
-    const oldCategory = phraseToEdit.category;
-    const oldIndex = phraseToEdit.index;
+    try {
+      const newCategory = categoryLabelMap[selectedCategoryLabel];
+      const existingPatientPhrases = await getAllPatientPhrases();
+      const existingPhrase = existingPatientPhrases.find((item) => item.id === phraseToEdit.id);
 
-    const existingPhrase = patientPhrases[oldCategory][oldIndex];
-    if (!existingPhrase) return;
+      if (!existingPhrase) return;
 
-    const file = editPhraseImageInput && editPhraseImageInput.files ? editPhraseImageInput.files[0] : null;
+      const file = editPhraseImageInput && editPhraseImageInput.files ? editPhraseImageInput.files[0] : null;
+      const uploadedImagePath = file
+        ? await uploadPhraseImage(file, existingPhrase.id)
+        : (existingPhrase.image_path || null);
 
-    const saveEditedPhrase = (imagePath) => {
-      const updatedPhrase = {
-        id: existingPhrase.id,
-        text: updatedTextEn,
-        textEn: updatedTextEn,
-        textMs: updatedTextMs,
-        image: imagePath || existingPhrase.image || DEFAULT_PHRASE_IMAGE
-      };
+      const { error } = await supabaseClient
+        .from('patient_phrases')
+        .update({
+          category: newCategory,
+          text_en: updatedTextEn,
+          text_ms: updatedTextMs,
+          image_path: uploadedImagePath
+        })
+        .eq('id', existingPhrase.id)
+        .eq('patient_id', phrasePatientId);
 
-      patientPhrases[oldCategory].splice(oldIndex, 1);
-      patientPhrases[newCategory].push(updatedPhrase);
-      syncPatientPhrasesToLocal(patientPhrases);
+      if (error) throw error;
 
-      updatePhraseCategoryCounts();
+      await updatePhraseCategoryCounts();
       setActiveCategoryButton(newCategory);
       setPanelCategory(newCategory);
-      renderPhraseCards(newCategory);
+      await renderPhraseCards(newCategory);
 
       phraseToEdit = null;
       editPhraseForm.reset();
       editPhraseModal.classList.remove('active');
       alert('Phrase updated successfully.');
-    };
-
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        saveEditedPhrase(reader.result);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      saveEditedPhrase(existingPhrase.image);
+    } catch (error) {
+      showError(error);
     }
   });
 }
 
 if (confirmDeletePhraseModal && deletePhraseModal) {
-  confirmDeletePhraseModal.addEventListener('click', () => {
+  confirmDeletePhraseModal.addEventListener('click', async () => {
     if (!phraseToDelete) return;
 
-    const patientPhrases = getPatientPhrasesFromLocal();
-    const phrase = patientPhrases[phraseToDelete.category][phraseToDelete.index];
+    try {
+      const { error } = await supabaseClient
+        .from('patient_phrases')
+        .delete()
+        .eq('id', phraseToDelete.id)
+        .eq('patient_id', phrasePatientId);
 
-    if (!phrase) return;
+      if (error) throw error;
 
-    patientPhrases[phraseToDelete.category].splice(phraseToDelete.index, 1);
-    syncPatientPhrasesToLocal(patientPhrases);
+      await updatePhraseCategoryCounts();
+      await renderPhraseCards(currentPhraseCategory);
 
-    updatePhraseCategoryCounts();
-    renderPhraseCards(currentPhraseCategory);
-
-    phraseToDelete = null;
-    deletePhraseModal.classList.remove('active');
-    alert('Phrase deleted successfully.');
+      phraseToDelete = null;
+      deletePhraseModal.classList.remove('active');
+      alert('Phrase deleted successfully.');
+    } catch (error) {
+      showError(error);
+    }
   });
 }
 
@@ -567,7 +663,14 @@ if (cancelDeletePhraseModal && deletePhraseModal) {
   }
 });
 
-updatePhraseCategoryCounts();
-setActiveCategoryButton('urgent');
-setPanelCategory('urgent');
-renderPhraseCards('urgent');
+async function initializeManagePhrasesPage() {
+  await loadCurrentUserProfile();
+  await updatePhraseCategoryCounts();
+  setActiveCategoryButton('urgent');
+  setPanelCategory('urgent');
+  await renderPhraseCards('urgent');
+}
+
+initializeManagePhrasesPage().catch((error) => {
+  showError(error);
+});
