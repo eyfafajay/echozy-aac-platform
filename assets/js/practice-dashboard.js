@@ -263,73 +263,99 @@ if (practicePatientStatus) {
   );
 }
 
-function getStoredPracticeClickCounts() {
-  return JSON.parse(localStorage.getItem('echozyPracticeClickCounts') || '{}');
-}
+async function getPatientPracticeClickCounts() {
+  const { data, error } = await supabaseClient
+    .from('practice_click_counts')
+    .select('content_type, content_id, click_count')
+    .eq('patient_id', patientId);
 
-function saveStoredPracticeClickCounts(data) {
-  localStorage.setItem('echozyPracticeClickCounts', JSON.stringify(data));
-}
-
-function getPatientPracticeClickCounts() {
-  const allPracticeClicks = getStoredPracticeClickCounts();
-
-  if (!allPracticeClicks[patientId]) {
-    allPracticeClicks[patientId] = {
-      phrases: {},
-      vocabulary: {}
-    };
-    saveStoredPracticeClickCounts(allPracticeClicks);
+  if (error) {
+    throw error;
   }
 
-  return allPracticeClicks[patientId];
+  const clicks = {
+    phrases: {},
+    vocabulary: {}
+  };
+
+  (data || []).forEach((row) => {
+    if (row.content_type === 'phrases' || row.content_type === 'vocabulary') {
+      clicks[row.content_type][row.content_id] = row.click_count || 0;
+    }
+  });
+
+  return clicks;
 }
 
-function recordPracticeCardClick(itemId) {
-  const allPracticeClicks = getStoredPracticeClickCounts();
-  const patientPracticeClicks = getPatientPracticeClickCounts();
-  const targetClicks = currentType === 'phrases'
-    ? patientPracticeClicks.phrases
-    : patientPracticeClicks.vocabulary;
+async function incrementPracticeClickCount(contentType, contentId) {
+  const { data: existingRow, error: fetchError } = await supabaseClient
+    .from('practice_click_counts')
+    .select('id, click_count')
+    .eq('patient_id', patientId)
+    .eq('content_type', contentType)
+    .eq('content_id', contentId)
+    .maybeSingle();
 
-  if (!itemId) {
+  if (fetchError) {
+    throw fetchError;
+  }
+
+  if (existingRow) {
+    const { error: updateError } = await supabaseClient
+      .from('practice_click_counts')
+      .update({
+        click_count: (existingRow.click_count || 0) + 1,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existingRow.id);
+
+    if (updateError) {
+      throw updateError;
+    }
+
     return;
   }
 
-  if (!targetClicks[itemId]) {
-    targetClicks[itemId] = 0;
+  const { error: insertError } = await supabaseClient
+    .from('practice_click_counts')
+    .insert({
+      patient_id: patientId,
+      content_type: contentType,
+      content_id: contentId,
+      click_count: 1
+    });
+
+  if (insertError) {
+    throw insertError;
+  }
+}
+
+async function getPatientPracticeResults() {
+  const { data, error } = await supabaseClient
+    .from('practice_results')
+    .select('content_type, content_id, result_status')
+    .eq('patient_id', patientId);
+
+  if (error) {
+    throw error;
   }
 
-  targetClicks[itemId] += 1;
+  const results = {
+    phrases: {},
+    vocabulary: {}
+  };
 
-  allPracticeClicks[patientId] = patientPracticeClicks;
-  saveStoredPracticeClickCounts(allPracticeClicks);
+  (data || []).forEach((row) => {
+    if (row.content_type === 'phrases' || row.content_type === 'vocabulary') {
+      results[row.content_type][row.content_id] = row.result_status || 'neutral';
+    }
+  });
+
+  return results;
 }
 
-function getStoredPracticeResults() {
-  return JSON.parse(localStorage.getItem('echozyPracticeResults') || '{}');
-}
-
-function saveStoredPracticeResults(data) {
-  localStorage.setItem('echozyPracticeResults', JSON.stringify(data));
-}
-
-function getPatientPracticeResults() {
-  const allResults = getStoredPracticeResults();
-
-  if (!allResults[patientId]) {
-    allResults[patientId] = {
-      phrases: {},
-      vocabulary: {}
-    };
-    saveStoredPracticeResults(allResults);
-  }
-
-  return allResults[patientId];
-}
-
-function getPracticeResultForItem(itemId) {
-  const patientResults = getPatientPracticeResults();
+async function getPracticeResultForItem(itemId) {
+  const patientResults = await getPatientPracticeResults();
   const targetResults = currentType === 'phrases'
     ? patientResults.phrases
     : patientResults.vocabulary;
@@ -337,25 +363,75 @@ function getPracticeResultForItem(itemId) {
   return targetResults[itemId] || 'neutral';
 }
 
-function togglePracticeResult(itemId) {
-  const allResults = getStoredPracticeResults();
-  const patientResults = getPatientPracticeResults();
+async function togglePracticeResult(itemId) {
+  const patientResults = await getPatientPracticeResults();
   const targetResults = currentType === 'phrases'
     ? patientResults.phrases
     : patientResults.vocabulary;
 
   const currentResult = targetResults[itemId] || 'neutral';
 
-  if (currentResult === 'neutral') {
-    targetResults[itemId] = 'success';
-  } else if (currentResult === 'success') {
-    targetResults[itemId] = 'unsuccessful';
-  } else {
-    targetResults[itemId] = 'neutral';
+  let nextResult = 'success';
+  if (currentResult === 'success') {
+    nextResult = 'unsuccessful';
+  } else if (currentResult === 'unsuccessful') {
+    nextResult = 'neutral';
   }
 
-  allResults[patientId] = patientResults;
-  saveStoredPracticeResults(allResults);
+  const { data: existingRow, error: fetchError } = await supabaseClient
+    .from('practice_results')
+    .select('id')
+    .eq('patient_id', patientId)
+    .eq('content_type', currentType)
+    .eq('content_id', itemId)
+    .maybeSingle();
+
+  if (fetchError) {
+    throw fetchError;
+  }
+
+  if (nextResult === 'neutral') {
+    if (existingRow) {
+      const { error: deleteError } = await supabaseClient
+        .from('practice_results')
+        .delete()
+        .eq('id', existingRow.id);
+
+      if (deleteError) {
+        throw deleteError;
+      }
+    }
+    return;
+  }
+
+  if (existingRow) {
+    const { error: updateError } = await supabaseClient
+      .from('practice_results')
+      .update({
+        result_status: nextResult,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existingRow.id);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return;
+  }
+
+  const { error: insertError } = await supabaseClient
+    .from('practice_results')
+    .insert({
+      patient_id: patientId,
+      content_type: currentType,
+      content_id: itemId,
+      result_status: nextResult
+    });
+
+  if (insertError) {
+    throw insertError;
+  }
 }
 
 function getStoredSessionLogs() {
@@ -575,16 +651,6 @@ function getAllIds(data) {
   return Object.values(data).flat().map((item) => item.id).filter(Boolean);
 }
 
-function sumClickCounts(clicksObject) {
-  return Object.values(clicksObject || {}).reduce((total, count) => total + count, 0);
-}
-
-function countPracticedItems(clicksObject, validIds) {
-  return Object.entries(clicksObject || {}).filter(([itemId, count]) => {
-    return validIds.includes(itemId) && count > 0;
-  }).length;
-}
-
 function countResultItems(resultsObject, validIds, targetStatus) {
   return Object.entries(resultsObject || {}).filter(([itemId, status]) => {
     return validIds.includes(itemId) && status === targetStatus;
@@ -602,7 +668,7 @@ function setProgressBarWidths(successBar, unsuccessfulBar, successWidth, unsucce
 }
 
 async function updatePracticeSummary() {
-  const patientPracticeResults = getPatientPracticeResults();
+  const patientPracticeResults = await getPatientPracticeResults();
   const phraseData = await getPatientPhrases();
   const vocabularyData = await getPatientVocabulary();
 
@@ -744,12 +810,16 @@ function getResultButtonLabel(resultState) {
 async function renderPracticeCards() {
   const labels = getCurrentLabels();
   const data = await getCurrentData();
-  const patientPracticeClicks = getPatientPracticeClickCounts();
+  const patientPracticeClicks = await getPatientPracticeClickCounts();
+  const patientPracticeResults = await getPatientPracticeResults();
 
   const items = data[currentCategory] || [];
   const practiceClicks = currentType === 'phrases'
     ? patientPracticeClicks.phrases
     : patientPracticeClicks.vocabulary;
+  const practiceResults = currentType === 'phrases'
+    ? patientPracticeResults.phrases
+    : patientPracticeResults.vocabulary;
   const resolvedLanguage = getResolvedPatientLanguage();
   const themeClass = getCategoryThemeClass(currentCategory);
 
@@ -770,7 +840,7 @@ async function renderPracticeCards() {
     ? items.map((item) => {
         const practiceCount = practiceClicks[item.id] || 0;
         const displayText = getTextByLanguage(item, resolvedLanguage);
-        const resultState = getPracticeResultForItem(item.id);
+        const resultState = practiceResults[item.id] || 'neutral';
 
         return `
           <div
@@ -802,26 +872,26 @@ async function renderPracticeCards() {
 
   const cards = practiceCardsGrid.querySelectorAll('.practice-card-shell');
   cards.forEach((card) => {
-    card.addEventListener('click', () => {
+    card.addEventListener('click', async () => {
       const itemId = card.dataset.itemId;
       const itemText = card.dataset.itemText;
 
-      recordPracticeCardClick(itemId);
-      updatePracticeSummary();
-      renderPracticeCards();
+      await incrementPracticeClickCount(currentType, itemId);
+      await updatePracticeSummary();
+      await renderPracticeCards();
       speakCardWithOpenAITTS(itemText);
     });
 
-    card.addEventListener('keydown', (event) => {
+    card.addEventListener('keydown', async (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
 
         const itemId = card.dataset.itemId;
         const itemText = card.dataset.itemText;
 
-        recordPracticeCardClick(itemId);
-        updatePracticeSummary();
-        renderPracticeCards();
+        await incrementPracticeClickCount(currentType, itemId);
+        await updatePracticeSummary();
+        await renderPracticeCards();
         speakCardWithOpenAITTS(itemText);
       }
     });
@@ -829,13 +899,13 @@ async function renderPracticeCards() {
 
   const resultButtons = practiceCardsGrid.querySelectorAll('[data-result-item-id]');
   resultButtons.forEach((button) => {
-    button.addEventListener('click', (event) => {
+    button.addEventListener('click', async (event) => {
       event.stopPropagation();
 
       const itemId = button.dataset.resultItemId;
-      togglePracticeResult(itemId);
-      updatePracticeSummary();
-      renderPracticeCards();
+      await togglePracticeResult(itemId);
+      await updatePracticeSummary();
+      await renderPracticeCards();
     });
   });
 }
