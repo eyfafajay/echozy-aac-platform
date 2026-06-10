@@ -93,7 +93,7 @@ function saveStoredPatients(patients) {
   localStorage.setItem('echozyPatients', JSON.stringify(patients));
 }
 
-function updatePatientStatusInStorage(patientId, nextStatus) {
+function updatePatientStatusInStorage(nextStatus) {
   const patients = getStoredPatients();
 
   if (!patients[patientId]) {
@@ -233,7 +233,7 @@ if (backToPatientDashboardBtn) {
 
   backToPatientDashboardBtn.addEventListener('click', () => {
     recordQuitSession();
-    updatePatientStatusInStorage(patientId, 'Inactive');
+    updatePatientStatusInStorage('Inactive');
   });
 }
 
@@ -252,14 +252,6 @@ if (phrasesVocabularyPatientStatus) {
   phrasesVocabularyPatientStatus.classList.add(
     patientStatus === 'Active' ? 'active-badge' : 'inactive-badge'
   );
-}
-
-function getStoredUsageCounts() {
-  return JSON.parse(localStorage.getItem('echozyUsageCounts') || '{}');
-}
-
-function saveStoredUsageCounts(data) {
-  localStorage.setItem('echozyUsageCounts', JSON.stringify(data));
 }
 
 function getStoredSessionLogs() {
@@ -290,18 +282,71 @@ function recordQuitSession() {
   saveStoredSessionLogs(allSessionLogs);
 }
 
-function getPatientUsageCounts() {
-  const allUsage = getStoredUsageCounts();
+async function getPatientUsageCounts() {
+  const { data, error } = await supabaseClient
+    .from('usage_counts')
+    .select('content_type, content_id, click_count')
+    .eq('patient_id', patientId);
 
-  if (!allUsage[patientId]) {
-    allUsage[patientId] = {
-      phrases: {},
-      vocabulary: {}
-    };
-    saveStoredUsageCounts(allUsage);
+  if (error) {
+    throw error;
   }
 
-  return allUsage[patientId];
+  const usage = {
+    phrases: {},
+    vocabulary: {}
+  };
+
+  (data || []).forEach((row) => {
+    if (row.content_type === 'phrases' || row.content_type === 'vocabulary') {
+      usage[row.content_type][row.content_id] = row.click_count || 0;
+    }
+  });
+
+  return usage;
+}
+
+async function incrementUsageCount(contentType, contentId) {
+  const { data: existingRow, error: fetchError } = await supabaseClient
+    .from('usage_counts')
+    .select('id, click_count')
+    .eq('patient_id', patientId)
+    .eq('content_type', contentType)
+    .eq('content_id', contentId)
+    .maybeSingle();
+
+  if (fetchError) {
+    throw fetchError;
+  }
+
+  if (existingRow) {
+    const { error: updateError } = await supabaseClient
+      .from('usage_counts')
+      .update({
+        click_count: (existingRow.click_count || 0) + 1,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existingRow.id);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return;
+  }
+
+  const { error: insertError } = await supabaseClient
+    .from('usage_counts')
+    .insert({
+      patient_id: patientId,
+      content_type: contentType,
+      content_id: contentId,
+      click_count: 1
+    });
+
+  if (insertError) {
+    throw insertError;
+  }
 }
 
 async function createSignedImageUrl(bucketName, imagePath) {
@@ -496,7 +541,7 @@ function countAllClicks(clicksObject) {
 async function updateTopSummary() {
   const phraseData = await getPatientPhrases();
   const vocabularyData = await getPatientVocabulary();
-  const usageData = getPatientUsageCounts();
+  const usageData = await getPatientUsageCounts();
 
   if (totalPhraseCardsCount) {
     totalPhraseCardsCount.textContent = countAllCards(phraseData);
@@ -545,25 +590,10 @@ async function renderCategories() {
   });
 }
 
-function recordCardClick(item) {
-  const allUsage = getStoredUsageCounts();
-  const patientUsage = getPatientUsageCounts();
-  const targetUsage = currentType === 'phrases' ? patientUsage.phrases : patientUsage.vocabulary;
-
-  if (!targetUsage[item.id]) {
-    targetUsage[item.id] = 0;
-  }
-
-  targetUsage[item.id] += 1;
-
-  allUsage[patientId] = patientUsage;
-  saveStoredUsageCounts(allUsage);
-}
-
 async function renderCards() {
   const labels = getCurrentLabels();
   const data = await getCurrentData();
-  const patientUsage = getPatientUsageCounts();
+  const patientUsage = await getPatientUsageCounts();
   const items = data[currentCategory] || [];
   const themeClass = getCategoryThemeClass(currentCategory);
   const resolvedLanguage = getResolvedPatientLanguage();
@@ -612,7 +642,7 @@ async function renderCards() {
       const selectedItem = items.find((item) => item.id === itemId);
       if (!selectedItem) return;
 
-      recordCardClick(selectedItem);
+      await incrementUsageCount(currentType, selectedItem.id);
       await updateTopSummary();
       await renderCards();
       speakCardWithOpenAITTS(itemText);
