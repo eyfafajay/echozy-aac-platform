@@ -21,8 +21,20 @@ const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
 const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
 
 const DEFAULT_VOCABULARY_IMAGE = '../../assets/images/placeholders/defaultPV.png';
+const VOCABULARY_BUCKET_NAME = 'vocabulary-images';
 
-const ADMIN_VOCABULARY_STORAGE_KEY = 'echozyAdminVocabulary';
+const SUPABASE_URL = 'https://drvmfnlaxkcqbwoqjefu.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4ugmgc1ktCaLEmwB1ttnbA_XjOCtqDm';
+
+const supabaseClient =
+  window.supabase && SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true
+        }
+      })
+    : null;
 
 const vocabularyCategories = {
   people: 'People',
@@ -63,28 +75,11 @@ const vocabularyCardClassMap = {
 let currentCategory = 'people';
 let editingVocabularyId = null;
 let vocabularyToDelete = null;
+let currentAdminUser = null;
 
-function createEmptyAdminVocabularyData() {
-  return {
-    people: [],
-    food: [],
-    places: [],
-    body: [],
-    feelings: [],
-    actions: []
-  };
-}
-
-function getStoredAdminVocabulary() {
-  const stored = JSON.parse(localStorage.getItem(ADMIN_VOCABULARY_STORAGE_KEY) || '{}');
-  return {
-    ...createEmptyAdminVocabularyData(),
-    ...stored
-  };
-}
-
-function saveStoredAdminVocabulary(data) {
-  localStorage.setItem(ADMIN_VOCABULARY_STORAGE_KEY, JSON.stringify(data));
+function showError(error) {
+  console.error(error);
+  alert(error?.message || 'Something went wrong. Please try again.');
 }
 
 function populateCategoryOptions() {
@@ -98,11 +93,120 @@ function populateCategoryOptions() {
   `;
 }
 
-function generateNextVocabularyId() {
-  const allVocabulary = getStoredAdminVocabulary();
+async function loadCurrentAdminUser() {
+  if (!supabaseClient) {
+    throw new Error('Supabase client is not available. Please load the Supabase CDN before this script.');
+  }
 
-  const existingIds = Object.values(allVocabulary)
-    .flat()
+  const {
+    data: { user },
+    error: userError
+  } = await supabaseClient.auth.getUser();
+
+  if (userError) {
+    throw userError;
+  }
+
+  if (!user) {
+    throw new Error('No signed-in admin found. Please sign in again.');
+  }
+
+  const { data: profile, error: profileError } = await supabaseClient
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError) {
+    throw profileError;
+  }
+
+  if (profile.role !== 'admin') {
+    throw new Error('Only admin accounts can manage default vocabulary.');
+  }
+
+  currentAdminUser = {
+    id: user.id,
+    email: user.email || '',
+    profile
+  };
+}
+
+async function getAllAdminVocabulary() {
+  if (!supabaseClient) {
+    throw new Error('Supabase client is not available.');
+  }
+
+  const { data, error } = await supabaseClient
+    .from('admin_vocabulary')
+    .select('*')
+    .order('id', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+}
+
+async function createVocabularySignedImageUrl(imagePath) {
+  if (!imagePath) {
+    return DEFAULT_VOCABULARY_IMAGE;
+  }
+
+  if (
+    imagePath.startsWith('http://') ||
+    imagePath.startsWith('https://') ||
+    imagePath.startsWith('data:')
+  ) {
+    return imagePath;
+  }
+
+  const { data, error } = await supabaseClient.storage
+    .from(VOCABULARY_BUCKET_NAME)
+    .createSignedUrl(imagePath, 60 * 60);
+
+  if (error) {
+    console.error(error);
+    return DEFAULT_VOCABULARY_IMAGE;
+  }
+
+  return data?.signedUrl || DEFAULT_VOCABULARY_IMAGE;
+}
+
+async function getGroupedAdminVocabulary() {
+  const vocabularyItems = await getAllAdminVocabulary();
+
+  const grouped = {
+    people: [],
+    food: [],
+    places: [],
+    body: [],
+    feelings: [],
+    actions: []
+  };
+
+  for (const item of vocabularyItems) {
+    if (!grouped[item.category]) {
+      continue;
+    }
+
+    grouped[item.category].push({
+      id: item.id,
+      textEn: item.text_en,
+      textMs: item.text_ms,
+      image: item.image_path || '',
+      imageUrl: await createVocabularySignedImageUrl(item.image_path || '')
+    });
+  }
+
+  return grouped;
+}
+
+async function generateNextVocabularyId() {
+  const vocabularyItems = await getAllAdminVocabulary();
+
+  const existingIds = vocabularyItems
     .map((item) => item.id)
     .filter((id) => /^VO\d{4}$/.test(id))
     .map((id) => parseInt(id.replace('VO', ''), 10));
@@ -111,23 +215,29 @@ function generateNextVocabularyId() {
   return `VO${String(nextNumber).padStart(4, '0')}`;
 }
 
-function readImageFileAsDataURL(file) {
-  return new Promise((resolve, reject) => {
-    if (!file) {
-      resolve('');
-      return;
-    }
+async function uploadVocabularyImage(file, vocabularyId) {
+  if (!file) {
+    return '';
+  }
 
-    const reader = new FileReader();
+  const safeFileName = file.name.replace(/\s+/g, '-');
+  const filePath = `admin/vocabulary/${vocabularyId}-${Date.now()}-${safeFileName}`;
 
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('Failed to read image file.'));
+  const { data, error } = await supabaseClient.storage
+    .from(VOCABULARY_BUCKET_NAME)
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
 
-    reader.readAsDataURL(file);
-  });
+  if (error) {
+    throw error;
+  }
+
+  return data.path;
 }
 
-function openAddModal() {
+async function openAddModal() {
   editingVocabularyId = null;
 
   if (modalTitle) {
@@ -139,7 +249,7 @@ function openAddModal() {
   }
 
   if (contentIdInput) {
-    contentIdInput.value = generateNextVocabularyId();
+    contentIdInput.value = await generateNextVocabularyId();
   }
 
   if (contentCategoryInput) {
@@ -173,25 +283,30 @@ function closeDeleteModal() {
   }
 }
 
-function findVocabularyById(vocabularyId) {
-  const allVocabulary = getStoredAdminVocabulary();
+async function findVocabularyById(vocabularyId) {
+  const { data, error } = await supabaseClient
+    .from('admin_vocabulary')
+    .select('*')
+    .eq('id', vocabularyId)
+    .single();
 
-  for (const [categoryKey, items] of Object.entries(allVocabulary)) {
-    const foundVocabulary = items.find((item) => item.id === vocabularyId);
-
-    if (foundVocabulary) {
-      return {
-        vocabulary: foundVocabulary,
-        categoryKey
-      };
-    }
+  if (error) {
+    throw error;
   }
 
-  return null;
+  return {
+    vocabulary: {
+      id: data.id,
+      textEn: data.text_en,
+      textMs: data.text_ms,
+      image: data.image_path || ''
+    },
+    categoryKey: data.category
+  };
 }
 
-function openEditModal(vocabularyId) {
-  const found = findVocabularyById(vocabularyId);
+async function openEditModal(vocabularyId) {
+  const found = await findVocabularyById(vocabularyId);
 
   if (!found) return;
 
@@ -226,28 +341,30 @@ function openEditModal(vocabularyId) {
   }
 }
 
-function deleteVocabulary(vocabularyId) {
-  const allVocabulary = getStoredAdminVocabulary();
+async function deleteVocabulary(vocabularyId) {
+  const { error } = await supabaseClient
+    .from('admin_vocabulary')
+    .delete()
+    .eq('id', vocabularyId);
 
-  Object.keys(allVocabulary).forEach((categoryKey) => {
-    allVocabulary[categoryKey] = allVocabulary[categoryKey].filter((item) => item.id !== vocabularyId);
-  });
+  if (error) {
+    throw error;
+  }
 
-  saveStoredAdminVocabulary(allVocabulary);
-  renderCategoryList();
-  renderVocabularyCards(currentCategory);
+  await renderCategoryList();
+  await renderVocabularyCards(currentCategory);
 }
 
-function setActiveCategory(selectedCategory) {
+async function setActiveCategory(selectedCategory) {
   currentCategory = selectedCategory;
-  renderCategoryList();
-  renderVocabularyCards(selectedCategory);
+  await renderCategoryList();
+  await renderVocabularyCards(selectedCategory);
 }
 
-function renderCategoryList() {
+async function renderCategoryList() {
   if (!categoryList) return;
 
-  const allVocabulary = getStoredAdminVocabulary();
+  const allVocabulary = await getGroupedAdminVocabulary();
 
   categoryList.innerHTML = Object.entries(vocabularyCategories).map(([key, label]) => {
     const count = (allVocabulary[key] || []).length;
@@ -268,16 +385,16 @@ function renderCategoryList() {
 
   const buttons = categoryList.querySelectorAll('[data-category]');
   buttons.forEach((button) => {
-    button.addEventListener('click', () => {
-      setActiveCategory(button.dataset.category);
+    button.addEventListener('click', async () => {
+      await setActiveCategory(button.dataset.category);
     });
   });
 }
 
-function renderVocabularyCards(categoryKey) {
+async function renderVocabularyCards(categoryKey) {
   if (!contentList) return;
 
-  const allVocabulary = getStoredAdminVocabulary();
+  const allVocabulary = await getGroupedAdminVocabulary();
   const vocabularyItems = allVocabulary[categoryKey] || [];
 
   contentList.className = 'vocabulary-list-panel admin-list-panel';
@@ -296,7 +413,7 @@ function renderVocabularyCards(categoryKey) {
     <div class="vocabulary-card-item ${vocabularyCardClassMap[categoryKey]}">
       <div class="vocabulary-card-left">
         <div class="vocabulary-icon-circle">
-          <img src="${item.image || DEFAULT_VOCABULARY_IMAGE}" alt="${item.textEn}" />
+          <img src="${item.imageUrl || DEFAULT_VOCABULARY_IMAGE}" alt="${item.textEn}" />
         </div>
         <div>
           <span>${item.textEn}</span>
@@ -313,8 +430,12 @@ function renderVocabularyCards(categoryKey) {
 
   const editButtons = contentList.querySelectorAll('[data-edit-id]');
   editButtons.forEach((button) => {
-    button.addEventListener('click', () => {
-      openEditModal(button.dataset.editId);
+    button.addEventListener('click', async () => {
+      try {
+        await openEditModal(button.dataset.editId);
+      } catch (error) {
+        showError(error);
+      }
     });
   });
 
@@ -340,49 +461,82 @@ async function handleSaveVocabulary(event) {
     return;
   }
 
-  const allVocabulary = getStoredAdminVocabulary();
-  let existingImage = '';
+  let existingImagePath = '';
 
   if (editingVocabularyId) {
-    const found = findVocabularyById(editingVocabularyId);
+    const found = await findVocabularyById(editingVocabularyId);
     if (found) {
-      existingImage = found.vocabulary.image || '';
+      existingImagePath = found.vocabulary.image || '';
     }
-
-    Object.keys(allVocabulary).forEach((key) => {
-      allVocabulary[key] = allVocabulary[key].filter((item) => item.id !== editingVocabularyId);
-    });
   }
 
-  const imageData = imageFile ? await readImageFileAsDataURL(imageFile) : existingImage;
+  const uploadedImagePath = imageFile
+    ? await uploadVocabularyImage(imageFile, vocabularyId)
+    : existingImagePath;
 
-  const savedVocabulary = {
+  const payload = {
     id: vocabularyId,
-    textEn,
-    textMs,
-    image: imageData
+    category: categoryKey,
+    text_en: textEn,
+    text_ms: textMs,
+    image_path: uploadedImagePath || null,
+    created_by: currentAdminUser?.id || null
   };
 
-  allVocabulary[categoryKey].push(savedVocabulary);
-  allVocabulary[categoryKey].sort((a, b) => a.id.localeCompare(b.id));
+  if (editingVocabularyId) {
+    const { error } = await supabaseClient
+      .from('admin_vocabulary')
+      .update({
+        category: payload.category,
+        text_en: payload.text_en,
+        text_ms: payload.text_ms,
+        image_path: payload.image_path
+      })
+      .eq('id', editingVocabularyId);
 
-  saveStoredAdminVocabulary(allVocabulary);
+    if (error) {
+      throw error;
+    }
+  } else {
+    const { error } = await supabaseClient
+      .from('admin_vocabulary')
+      .insert(payload);
+
+    if (error) {
+      throw error;
+    }
+  }
+
   closeContentModal();
 
   currentCategory = categoryKey;
-  renderCategoryList();
-  renderVocabularyCards(currentCategory);
+  await renderCategoryList();
+  await renderVocabularyCards(currentCategory);
 }
 
 if (logoutBtn) {
-  logoutBtn.addEventListener('click', () => {
-    localStorage.removeItem('echozySession');
-    window.location.href = '../auth/admin-signin.html';
+  logoutBtn.addEventListener('click', async () => {
+    try {
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      localStorage.removeItem('echozySession');
+      window.location.href = '../auth/admin-signin.html';
+    }
   });
 }
 
 if (addContentBtn) {
-  addContentBtn.addEventListener('click', openAddModal);
+  addContentBtn.addEventListener('click', async () => {
+    try {
+      await openAddModal();
+    } catch (error) {
+      showError(error);
+    }
+  });
 }
 
 if (closeModalBtn) {
@@ -402,7 +556,13 @@ if (contentModal) {
 }
 
 if (contentForm) {
-  contentForm.addEventListener('submit', handleSaveVocabulary);
+  contentForm.addEventListener('submit', async (event) => {
+    try {
+      await handleSaveVocabulary(event);
+    } catch (error) {
+      showError(error);
+    }
+  });
 }
 
 if (cancelDeleteBtn) {
@@ -410,11 +570,15 @@ if (cancelDeleteBtn) {
 }
 
 if (confirmDeleteBtn) {
-  confirmDeleteBtn.addEventListener('click', () => {
-    if (vocabularyToDelete) {
-      deleteVocabulary(vocabularyToDelete);
+  confirmDeleteBtn.addEventListener('click', async () => {
+    if (!vocabularyToDelete) return;
+
+    try {
+      await deleteVocabulary(vocabularyToDelete);
+      closeDeleteModal();
+    } catch (error) {
+      showError(error);
     }
-    closeDeleteModal();
   });
 }
 
@@ -426,6 +590,13 @@ if (deleteModal) {
   });
 }
 
-populateCategoryOptions();
-renderCategoryList();
-renderVocabularyCards(currentCategory);
+async function initializeAdminManageVocabularyPage() {
+  await loadCurrentAdminUser();
+  populateCategoryOptions();
+  await renderCategoryList();
+  await renderVocabularyCards(currentCategory);
+}
+
+initializeAdminManageVocabularyPage().catch((error) => {
+  showError(error);
+});
