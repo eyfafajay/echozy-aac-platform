@@ -38,8 +38,21 @@ const frequentlyUsedContentHeader = document.getElementById('frequentlyUsedConte
 const frequentTabButtons = document.querySelectorAll('[data-frequent-type]');
 
 const DEFAULT_IMAGE = '../../assets/images/placeholders/defaultPV.png';
-const ADMIN_PHRASES_STORAGE_KEY = 'echozyAdminPhrases';
-const ADMIN_VOCABULARY_STORAGE_KEY = 'echozyAdminVocabulary';
+const PHRASE_BUCKET_NAME = 'phrase-images';
+const VOCABULARY_BUCKET_NAME = 'vocabulary-images';
+
+const SUPABASE_URL = 'https://drvmfnlaxkcqbwoqjefu.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4ugmgc1ktCaLEmwB1ttnbA_XjOCtqDm';
+
+const supabaseClient =
+  window.supabase && SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true
+        }
+      })
+    : null;
 
 const MIN_CARD_SCALE = 80;
 const MAX_CARD_SCALE = 150;
@@ -242,30 +255,6 @@ if (frequentlyUsedPatientStatus) {
   );
 }
 
-function getStoredPhrases() {
-  return JSON.parse(localStorage.getItem('echozyPhrases') || '{}');
-}
-
-function getStoredVocabulary() {
-  return JSON.parse(localStorage.getItem('echozyVocabulary') || '{}');
-}
-
-function getStoredAdminPhrases() {
-  const stored = JSON.parse(localStorage.getItem(ADMIN_PHRASES_STORAGE_KEY) || '{}');
-  return {
-    ...createEmptyPhraseData(),
-    ...stored
-  };
-}
-
-function getStoredAdminVocabulary() {
-  const stored = JSON.parse(localStorage.getItem(ADMIN_VOCABULARY_STORAGE_KEY) || '{}');
-  return {
-    ...createEmptyVocabularyData(),
-    ...stored
-  };
-}
-
 function getStoredUsageCounts() {
   return JSON.parse(localStorage.getItem('echozyUsageCounts') || '{}');
 }
@@ -302,38 +291,6 @@ function recordQuitSession() {
   saveStoredSessionLogs(allSessionLogs);
 }
 
-function getPatientPhrases() {
-  const allPhrases = getStoredPhrases();
-  const patientPhrases = allPhrases[patientId] || createEmptyPhraseData();
-  const adminPhrases = getStoredAdminPhrases();
-  const merged = createEmptyPhraseData();
-
-  Object.keys(merged).forEach((category) => {
-    merged[category] = [
-      ...(adminPhrases[category] || []),
-      ...(patientPhrases[category] || [])
-    ];
-  });
-
-  return merged;
-}
-
-function getPatientVocabulary() {
-  const allVocabulary = getStoredVocabulary();
-  const patientVocabulary = allVocabulary[patientId] || createEmptyVocabularyData();
-  const adminVocabulary = getStoredAdminVocabulary();
-  const merged = createEmptyVocabularyData();
-
-  Object.keys(merged).forEach((category) => {
-    merged[category] = [
-      ...(adminVocabulary[category] || []),
-      ...(patientVocabulary[category] || [])
-    ];
-  });
-
-  return merged;
-}
-
 function getPatientUsageCounts() {
   const allUsage = getStoredUsageCounts();
 
@@ -346,6 +303,137 @@ function getPatientUsageCounts() {
   }
 
   return allUsage[patientId];
+}
+
+async function createSignedImageUrl(bucketName, imagePath) {
+  if (!imagePath) {
+    return DEFAULT_IMAGE;
+  }
+
+  if (
+    imagePath.startsWith('http://') ||
+    imagePath.startsWith('https://') ||
+    imagePath.startsWith('data:')
+  ) {
+    return imagePath;
+  }
+
+  const { data, error } = await supabaseClient.storage
+    .from(bucketName)
+    .createSignedUrl(imagePath, 60 * 60);
+
+  if (error) {
+    console.error(error);
+    return DEFAULT_IMAGE;
+  }
+
+  return data?.signedUrl || DEFAULT_IMAGE;
+}
+
+async function getAllAdminPhrases() {
+  const { data, error } = await supabaseClient
+    .from('admin_phrases')
+    .select('*')
+    .order('id', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function getAllAdminVocabulary() {
+  const { data, error } = await supabaseClient
+    .from('admin_vocabulary')
+    .select('*')
+    .order('id', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function getAllPatientPhrases() {
+  const { data, error } = await supabaseClient
+    .from('patient_phrases')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function getAllPatientVocabulary() {
+  const { data, error } = await supabaseClient
+    .from('patient_vocabulary')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function getPatientPhrases() {
+  const adminPhrases = await getAllAdminPhrases();
+  const patientPhrases = await getAllPatientPhrases();
+  const merged = createEmptyPhraseData();
+
+  for (const phrase of adminPhrases) {
+    if (!merged[phrase.category]) continue;
+
+    merged[phrase.category].push({
+      id: phrase.id,
+      text: phrase.text_en,
+      textEn: phrase.text_en,
+      textMs: phrase.text_ms,
+      image: await createSignedImageUrl(PHRASE_BUCKET_NAME, phrase.image_path || '')
+    });
+  }
+
+  for (const phrase of patientPhrases) {
+    if (!merged[phrase.category]) continue;
+
+    merged[phrase.category].push({
+      id: phrase.id,
+      text: phrase.text_en,
+      textEn: phrase.text_en,
+      textMs: phrase.text_ms,
+      image: await createSignedImageUrl(PHRASE_BUCKET_NAME, phrase.image_path || '')
+    });
+  }
+
+  return merged;
+}
+
+async function getPatientVocabulary() {
+  const adminVocabulary = await getAllAdminVocabulary();
+  const patientVocabulary = await getAllPatientVocabulary();
+  const merged = createEmptyVocabularyData();
+
+  for (const item of adminVocabulary) {
+    if (!merged[item.category]) continue;
+
+    merged[item.category].push({
+      id: item.id,
+      text: item.text_en,
+      textEn: item.text_en,
+      textMs: item.text_ms,
+      image: await createSignedImageUrl(VOCABULARY_BUCKET_NAME, item.image_path || '')
+    });
+  }
+
+  for (const item of patientVocabulary) {
+    if (!merged[item.category]) continue;
+
+    merged[item.category].push({
+      id: item.id,
+      text: item.text_en,
+      textEn: item.text_en,
+      textMs: item.text_ms,
+      image: await createSignedImageUrl(VOCABULARY_BUCKET_NAME, item.image_path || '')
+    });
+  }
+
+  return merged;
 }
 
 const phraseCategoryLabels = {
@@ -384,8 +472,8 @@ const frequentCategoryThemeMap = {
   actions: 'board-theme-actions'
 };
 
-function getCurrentData() {
-  return currentType === 'phrases' ? getPatientPhrases() : getPatientVocabulary();
+async function getCurrentData() {
+  return currentType === 'phrases' ? await getPatientPhrases() : await getPatientVocabulary();
 }
 
 function getCurrentLabels() {
@@ -422,9 +510,9 @@ function countAllClicks(clicksObject) {
   return Object.values(clicksObject).reduce((total, count) => total + count, 0);
 }
 
-function updateTopSummary() {
-  const phraseData = getPatientPhrases();
-  const vocabularyData = getPatientVocabulary();
+async function updateTopSummary() {
+  const phraseData = await getPatientPhrases();
+  const vocabularyData = await getPatientVocabulary();
   const usageData = getPatientUsageCounts();
 
   const phraseItems = flattenItemsByType(phraseData, 'phrases');
@@ -450,9 +538,9 @@ function updateTopSummary() {
   }
 }
 
-function renderCategories() {
+async function renderCategories() {
   const labels = getCurrentLabels();
-  const data = getCurrentData();
+  const data = await getCurrentData();
   const usageData = getPatientUsageCounts();
   const categoryKeys = Object.keys(labels);
 
@@ -485,10 +573,10 @@ function renderCategories() {
 
   const categoryButtons = frequentlyUsedCategoryList.querySelectorAll('[data-category]');
   categoryButtons.forEach((button) => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       currentCategory = button.dataset.category;
-      renderCategories();
-      renderFrequentlyUsedCards();
+      await renderCategories();
+      await renderFrequentlyUsedCards();
     });
   });
 }
@@ -506,15 +594,11 @@ function recordUsage(type, itemId) {
 
   allUsage[patientId] = patientUsage;
   saveStoredUsageCounts(allUsage);
-
-  updateTopSummary();
-  renderCategories();
-  renderFrequentlyUsedCards();
 }
 
-function renderFrequentlyUsedCards() {
+async function renderFrequentlyUsedCards() {
   const labels = getCurrentLabels();
-  const data = getCurrentData();
+  const data = await getCurrentData();
   const patientUsage = getPatientUsageCounts();
   const items = Array.isArray(data[currentCategory]) ? data[currentCategory] : [];
   const themeClass = getCategoryThemeClass(currentCategory);
@@ -564,26 +648,29 @@ function renderFrequentlyUsedCards() {
 
   const cards = frequentlyUsedCardsGrid.querySelectorAll('[data-item-id]');
   cards.forEach((card) => {
-    card.addEventListener('click', () => {
+    card.addEventListener('click', async () => {
       const itemId = card.dataset.itemId;
       const itemText = card.dataset.itemText;
 
       recordUsage(currentType, itemId);
+      await updateTopSummary();
+      await renderCategories();
+      await renderFrequentlyUsedCards();
       speakCardWithOpenAITTS(itemText);
     });
   });
 }
 
 frequentTabButtons.forEach((button) => {
-  button.addEventListener('click', () => {
+  button.addEventListener('click', async () => {
     frequentTabButtons.forEach((btn) => btn.classList.remove('active-board-tab'));
     button.classList.add('active-board-tab');
 
     currentType = button.dataset.frequentType;
     currentCategory = currentType === 'phrases' ? 'urgent' : 'people';
 
-    renderCategories();
-    renderFrequentlyUsedCards();
+    await renderCategories();
+    await renderFrequentlyUsedCards();
   });
 });
 
@@ -605,7 +692,13 @@ if (increaseCardSizeBtn) {
   });
 }
 
-updateTopSummary();
-renderCategories();
-renderFrequentlyUsedCards();
-applyCardScale();
+async function initializeFrequentlyUsedPage() {
+  await updateTopSummary();
+  await renderCategories();
+  await renderFrequentlyUsedCards();
+  applyCardScale();
+}
+
+initializeFrequentlyUsedPage().catch((error) => {
+  console.error(error);
+});
