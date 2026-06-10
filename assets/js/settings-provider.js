@@ -2,7 +2,7 @@ const pageParams = new URLSearchParams(window.location.search);
 const storedSession = JSON.parse(localStorage.getItem('echozySession') || '{}');
 
 const currentRole = pageParams.get('role') || storedSession.role || 'provider';
-const currentUserId = pageParams.get('userId') || storedSession.userId || 'U0001';
+const currentUserId = pageParams.get('userId') || storedSession.userId || '';
 const currentName = pageParams.get('name') || storedSession.fullName || 'Healthcare Provider';
 const currentEmail = storedSession.email || 'provider@example.com';
 
@@ -29,6 +29,10 @@ const settingsAssignedPatientsCount = document.getElementById('settingsAssignedP
 
 const providerSettingsForm = document.getElementById('providerSettingsForm');
 
+const providerCurrentPasswordInput = document.getElementById('provider-current-password');
+const providerNewPasswordInput = document.getElementById('provider-new-password');
+const providerConfirmPasswordInput = document.getElementById('provider-confirm-password');
+
 const sharedUserQuery = new URLSearchParams({
   role: currentRole,
   userId: currentUserId,
@@ -51,18 +55,28 @@ if (settingsNavLink) {
   settingsNavLink.href = `settings-provider.html?${sharedUserQuery}`;
 }
 
-if (logoutNavLink) {
-  logoutNavLink.addEventListener('click', () => {
-    localStorage.removeItem('echozySession');
-  });
-}
-
 const PLACEHOLDER_AVATAR = `data:image/svg+xml;utf8,
 <svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
   <rect width="160" height="160" rx="80" fill="%23e8f3fb"/>
   <circle cx="80" cy="60" r="26" fill="%239fc0e7"/>
   <path d="M38 128c8-22 29-34 42-34s34 12 42 34" fill="%239fc0e7"/>
 </svg>`;
+
+const SUPABASE_URL = 'https://drvmfnlaxkcqbwoqjefu.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4ugmgc1ktCaLEmwB1ttnbA_XjOCtqDm';
+
+const supabaseClient =
+  window.supabase && SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true
+        }
+      })
+    : null;
+
+let currentAuthUser = null;
+let currentProfile = null;
 
 function getAvatarByGender(gender) {
   if (gender === 'Female') {
@@ -80,107 +94,132 @@ function getStoredPatients() {
   return JSON.parse(localStorage.getItem('echozyPatients') || '{}');
 }
 
-function getStoredUsers() {
-  return JSON.parse(localStorage.getItem('echozyUsers') || '{}');
-}
-
-function saveStoredUsers(users) {
-  localStorage.setItem('echozyUsers', JSON.stringify(users));
-}
-
 function formatPatientCount(count) {
   return `${count} ${count === 1 ? 'Patient' : 'Patients'}`;
 }
 
-function getCurrentSignedInUser() {
-  const users = getStoredUsers();
+function showError(error) {
+  console.error(error);
+  alert(error?.message || 'Something went wrong. Please try again.');
+}
 
-  if (currentUserId && users[currentUserId]) {
-    return users[currentUserId];
+function updateSessionWithProfile(profile, authUser) {
+  const updatedSession = {
+    ...storedSession,
+    role: profile?.role || currentRole,
+    userId: authUser?.id || currentUserId,
+    fullName: profile?.full_name || currentName,
+    email: authUser?.email || currentEmail,
+    staffId: profile?.license || storedSession.staffId || ''
+  };
+
+  localStorage.setItem('echozySession', JSON.stringify(updatedSession));
+}
+
+function fillProviderSettings(profile, authUser) {
+  const fullName = profile?.full_name || currentName || '';
+  const email = authUser?.email || currentEmail || '';
+  const phone = profile?.phone || '';
+  const gender = profile?.gender || '';
+  const organization = profile?.organization || '';
+  const department = profile?.department || '';
+  const position = profile?.position || '';
+  const license = profile?.license || '';
+
+  if (settingsProfileName) {
+    settingsProfileName.textContent = fullName;
   }
 
-  return (
-    Object.values(users).find(
-      (user) =>
-        user.email &&
-        storedSession.email &&
-        user.email.toLowerCase() === storedSession.email.toLowerCase()
-    ) || null
-  );
+  if (settingsProfileEmail) {
+    settingsProfileEmail.textContent = email;
+  }
+
+  if (settingsProfileDepartment) {
+    settingsProfileDepartment.textContent = department;
+  }
+
+  if (settingsProfileAvatar) {
+    settingsProfileAvatar.src = getAvatarByGender(gender);
+  }
+
+  if (providerFullname) {
+    providerFullname.value = fullName;
+  }
+
+  if (providerEmail) {
+    providerEmail.value = email;
+  }
+
+  if (providerPhone) {
+    providerPhone.value = phone;
+  }
+
+  if (providerGender) {
+    providerGender.value = gender;
+  }
+
+  if (providerOrganization) {
+    providerOrganization.value = organization;
+  }
+
+  if (providerDepartment) {
+    providerDepartment.value = department;
+  }
+
+  if (providerPosition) {
+    providerPosition.value = position;
+  }
+
+  if (providerLicense) {
+    providerLicense.value = license;
+  }
 }
 
-const storedProviderSettings = JSON.parse(localStorage.getItem('echozyProviderSettings') || '{}');
-const signedInUser = getCurrentSignedInUser();
+async function loadCurrentProviderProfile() {
+  if (!supabaseClient) {
+    throw new Error('Supabase client is not available. Please load the Supabase CDN before this script.');
+  }
 
-const providerData = {
-  fullName:
-    storedProviderSettings.fullName ||
-    signedInUser?.fullName ||
-    currentName ||
-    '',
-  email:
-    storedProviderSettings.email ||
-    signedInUser?.email ||
-    currentEmail ||
-    '',
-  phone: storedProviderSettings.phone || signedInUser?.phone || '',
-  gender: storedProviderSettings.gender || signedInUser?.gender || '',
-  organization: storedProviderSettings.organization || signedInUser?.organization || '',
-  department: storedProviderSettings.department || signedInUser?.department || '',
-  position: storedProviderSettings.position || signedInUser?.position || '',
-  license:
-    storedProviderSettings.license ||
-    signedInUser?.license ||
-    signedInUser?.staffId ||
-    ''
-};
+  const {
+    data: { user },
+    error: userError
+  } = await supabaseClient.auth.getUser();
 
-if (settingsProfileName) {
-  settingsProfileName.textContent = providerData.fullName || '';
-}
+  if (userError) {
+    throw userError;
+  }
 
-if (settingsProfileEmail) {
-  settingsProfileEmail.textContent = providerData.email || '';
-}
+  if (!user) {
+    throw new Error('No signed-in user found. Please sign in again.');
+  }
 
-if (settingsProfileDepartment) {
-  settingsProfileDepartment.textContent = providerData.department || '';
-}
+  currentAuthUser = user;
 
-if (settingsProfileAvatar) {
-  settingsProfileAvatar.src = getAvatarByGender(providerData.gender);
-}
+  const { data: profile, error: profileError } = await supabaseClient
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single();
 
-if (providerFullname) {
-  providerFullname.value = providerData.fullName || '';
-}
+  if (profileError) {
+    throw profileError;
+  }
 
-if (providerEmail) {
-  providerEmail.value = providerData.email || '';
-}
+  currentProfile = profile;
 
-if (providerPhone) {
-  providerPhone.value = providerData.phone || '';
-}
+  if (profile.role !== 'provider') {
+    const fallbackQuery = new URLSearchParams({
+      role: profile.role || 'caregiver',
+      userId: user.id,
+      name: profile.full_name || currentName
+    }).toString();
 
-if (providerGender) {
-  providerGender.value = providerData.gender || '';
-}
+    window.location.href = `settings-caregiver.html?${fallbackQuery}`;
+    return;
+  }
 
-if (providerOrganization) {
-  providerOrganization.value = providerData.organization || '';
-}
-
-if (providerDepartment) {
-  providerDepartment.value = providerData.department || '';
-}
-
-if (providerPosition) {
-  providerPosition.value = providerData.position || '';
-}
-
-if (providerLicense) {
-  providerLicense.value = providerData.license || '';
+  updateSessionWithProfile(profile, user);
+  fillProviderSettings(profile, user);
 }
 
 if (providerGender) {
@@ -197,65 +236,149 @@ if (settingsAssignedPatientsCount) {
   settingsAssignedPatientsCount.textContent = formatPatientCount(assignedPatientsTotal);
 }
 
-if (providerSettingsForm) {
-  providerSettingsForm.addEventListener('submit', (event) => {
+if (logoutNavLink) {
+  logoutNavLink.addEventListener('click', async (event) => {
     event.preventDefault();
 
-    const updatedProviderSettings = {
-      fullName: providerFullname ? providerFullname.value.trim() : providerData.fullName,
-      email: providerEmail ? providerEmail.value.trim() : providerData.email,
-      phone: providerPhone ? providerPhone.value.trim() : providerData.phone,
-      gender: providerGender ? providerGender.value : providerData.gender,
-      organization: providerOrganization ? providerOrganization.value.trim() : providerData.organization,
-      department: providerDepartment ? providerDepartment.value.trim() : providerData.department,
-      position: providerPosition ? providerPosition.value.trim() : providerData.position,
-      license: providerLicense ? providerLicense.value.trim() : providerData.license
-    };
-
-    localStorage.setItem('echozyProviderSettings', JSON.stringify(updatedProviderSettings));
-
-    const users = getStoredUsers();
-    const userKey =
-      currentUserId && users[currentUserId]
-        ? currentUserId
-        : Object.keys(users).find((key) => {
-            const user = users[key];
-            return (
-              user.email &&
-              storedSession.email &&
-              user.email.toLowerCase() === storedSession.email.toLowerCase()
-            );
-          });
-
-    if (userKey) {
-      users[userKey] = {
-        ...users[userKey],
-        fullName: updatedProviderSettings.fullName,
-        email: updatedProviderSettings.email,
-        phone: updatedProviderSettings.phone,
-        gender: updatedProviderSettings.gender,
-        organization: updatedProviderSettings.organization,
-        department: updatedProviderSettings.department,
-        position: updatedProviderSettings.position,
-        license: updatedProviderSettings.license,
-        updatedAt: new Date().toISOString()
-      };
-      saveStoredUsers(users);
+    try {
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      localStorage.removeItem('echozySession');
+      window.location.href = '../../index.html';
     }
-
-    const updatedSession = {
-      ...storedSession,
-      role: currentRole,
-      userId: currentUserId,
-      fullName: updatedProviderSettings.fullName,
-      email: updatedProviderSettings.email
-    };
-
-    localStorage.setItem('echozySession', JSON.stringify(updatedSession));
-
-    alert('Settings updated successfully.');
-
-    window.location.href =
-      `settings-provider.html?role=${encodeURIComponent(currentRole)}&userId=${encodeURIComponent(currentUserId)}&name=${encodeURIComponent(updatedProviderSettings.fullName)}`;
   });
 }
+
+if (providerSettingsForm) {
+  providerSettingsForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    if (!supabaseClient) {
+      alert('Supabase client is not available. Please load the Supabase CDN before this script.');
+      return;
+    }
+
+    if (!currentAuthUser || !currentProfile) {
+      alert('Unable to load your profile. Please refresh and try again.');
+      return;
+    }
+
+    const updatedFullName = providerFullname ? providerFullname.value.trim() : '';
+    const updatedEmail = providerEmail ? providerEmail.value.trim() : '';
+    const updatedPhone = providerPhone ? providerPhone.value.trim() : '';
+    const updatedGender = providerGender ? providerGender.value : '';
+    const updatedOrganization = providerOrganization ? providerOrganization.value.trim() : '';
+    const updatedDepartment = providerDepartment ? providerDepartment.value.trim() : '';
+    const updatedPosition = providerPosition ? providerPosition.value.trim() : '';
+    const updatedLicense = providerLicense ? providerLicense.value.trim() : '';
+
+    if (!updatedFullName || !updatedEmail) {
+      alert('Full name and email address are required.');
+      return;
+    }
+
+    const currentPassword = providerCurrentPasswordInput ? providerCurrentPasswordInput.value : '';
+    const newPassword = providerNewPasswordInput ? providerNewPasswordInput.value : '';
+    const confirmPassword = providerConfirmPasswordInput ? providerConfirmPasswordInput.value : '';
+
+    if ((currentPassword || newPassword || confirmPassword) && !currentPassword) {
+      alert('Please enter your current password to change your password.');
+      return;
+    }
+
+    if ((currentPassword || newPassword || confirmPassword) && !newPassword) {
+      alert('Please enter your new password.');
+      return;
+    }
+
+    if (newPassword && newPassword !== confirmPassword) {
+      alert('New password and confirm password do not match.');
+      return;
+    }
+
+    try {
+      const { error: profileUpdateError } = await supabaseClient
+        .from('profiles')
+        .update({
+          full_name: updatedFullName,
+          phone: updatedPhone || null,
+          gender: updatedGender || null,
+          organization: updatedOrganization || null,
+          department: updatedDepartment || null,
+          position: updatedPosition || null,
+          license: updatedLicense || null
+        })
+        .eq('id', currentAuthUser.id);
+
+      if (profileUpdateError) {
+        throw profileUpdateError;
+      }
+
+      if (updatedEmail !== (currentAuthUser.email || '')) {
+        const { error: emailUpdateError } = await supabaseClient.auth.updateUser({
+          email: updatedEmail
+        });
+
+        if (emailUpdateError) {
+          throw emailUpdateError;
+        }
+      }
+
+      if (newPassword) {
+        const { error: passwordUpdateError } = await supabaseClient.auth.updateUser({
+          password: newPassword
+        });
+
+        if (passwordUpdateError) {
+          throw passwordUpdateError;
+        }
+      }
+
+      const refreshedProfile = {
+        ...currentProfile,
+        full_name: updatedFullName,
+        phone: updatedPhone || null,
+        gender: updatedGender || null,
+        organization: updatedOrganization || null,
+        department: updatedDepartment || null,
+        position: updatedPosition || null,
+        license: updatedLicense || null
+      };
+
+      const refreshedAuthUser = {
+        ...currentAuthUser,
+        email: updatedEmail
+      };
+
+      currentProfile = refreshedProfile;
+      currentAuthUser = refreshedAuthUser;
+
+      updateSessionWithProfile(refreshedProfile, refreshedAuthUser);
+      fillProviderSettings(refreshedProfile, refreshedAuthUser);
+
+      if (providerCurrentPasswordInput) providerCurrentPasswordInput.value = '';
+      if (providerNewPasswordInput) providerNewPasswordInput.value = '';
+      if (providerConfirmPasswordInput) providerConfirmPasswordInput.value = '';
+
+      alert('Settings updated successfully.');
+
+      const refreshedQuery = new URLSearchParams({
+        role: refreshedProfile.role || currentRole,
+        userId: currentAuthUser.id,
+        name: refreshedProfile.full_name || updatedFullName
+      }).toString();
+
+      window.history.replaceState({}, '', `settings-provider.html?${refreshedQuery}`);
+    } catch (error) {
+      showError(error);
+    }
+  });
+}
+
+loadCurrentProviderProfile().catch((error) => {
+  showError(error);
+});
