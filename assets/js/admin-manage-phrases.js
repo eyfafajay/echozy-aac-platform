@@ -21,6 +21,7 @@ const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
 const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
 
 const DEFAULT_PHRASE_IMAGE = '../../assets/images/placeholders/defaultPV.png';
+const PHRASE_BUCKET_NAME = 'phrase-images';
 
 const SUPABASE_URL = 'https://drvmfnlaxkcqbwoqjefu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4ugmgc1ktCaLEmwB1ttnbA_XjOCtqDm';
@@ -156,6 +157,31 @@ async function getAllAdminPhrases() {
   return data || [];
 }
 
+async function createPhraseSignedImageUrl(imagePath) {
+  if (!imagePath) {
+    return DEFAULT_PHRASE_IMAGE;
+  }
+
+  if (
+    imagePath.startsWith('http://') ||
+    imagePath.startsWith('https://') ||
+    imagePath.startsWith('data:')
+  ) {
+    return imagePath;
+  }
+
+  const { data, error } = await supabaseClient.storage
+    .from(PHRASE_BUCKET_NAME)
+    .createSignedUrl(imagePath, 60 * 60);
+
+  if (error) {
+    console.error(error);
+    return DEFAULT_PHRASE_IMAGE;
+  }
+
+  return data?.signedUrl || DEFAULT_PHRASE_IMAGE;
+}
+
 async function getGroupedAdminPhrases() {
   const phrases = await getAllAdminPhrases();
 
@@ -170,18 +196,19 @@ async function getGroupedAdminPhrases() {
     activities: []
   };
 
-  phrases.forEach((phrase) => {
+  for (const phrase of phrases) {
     if (!grouped[phrase.category]) {
-      return;
+      continue;
     }
 
     grouped[phrase.category].push({
       id: phrase.id,
       textEn: phrase.text_en,
       textMs: phrase.text_ms,
-      image: phrase.image_path || ''
+      image: phrase.image_path || '',
+      imageUrl: await createPhraseSignedImageUrl(phrase.image_path || '')
     });
-  });
+  }
 
   return grouped;
 }
@@ -198,20 +225,26 @@ async function generateNextPhraseId() {
   return `PH${String(nextNumber).padStart(4, '0')}`;
 }
 
-function readImageFileAsDataURL(file) {
-  return new Promise((resolve, reject) => {
-    if (!file) {
-      resolve('');
-      return;
-    }
+async function uploadPhraseImage(file, phraseId) {
+  if (!file) {
+    return '';
+  }
 
-    const reader = new FileReader();
+  const safeFileName = file.name.replace(/\s+/g, '-');
+  const filePath = `admin/phrases/${phraseId}-${Date.now()}-${safeFileName}`;
 
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('Failed to read image file.'));
+  const { data, error } = await supabaseClient.storage
+    .from(PHRASE_BUCKET_NAME)
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
 
-    reader.readAsDataURL(file);
-  });
+  if (error) {
+    throw error;
+  }
+
+  return data.path;
 }
 
 async function openAddModal() {
@@ -390,7 +423,7 @@ async function renderPhraseCards(categoryKey) {
     <div class="phrase-card-item ${phraseCardClassMap[categoryKey]}">
       <div class="phrase-card-left">
         <div class="phrase-icon-circle">
-          <img src="${phrase.image || DEFAULT_PHRASE_IMAGE}" alt="${phrase.textEn}" />
+          <img src="${phrase.imageUrl || DEFAULT_PHRASE_IMAGE}" alt="${phrase.textEn}" />
         </div>
         <div>
           <span>${phrase.textEn}</span>
@@ -438,23 +471,25 @@ async function handleSavePhrase(event) {
     return;
   }
 
-  let existingImage = '';
+  let existingImagePath = '';
 
   if (editingPhraseId) {
     const found = await findPhraseById(editingPhraseId);
     if (found) {
-      existingImage = found.phrase.image || '';
+      existingImagePath = found.phrase.image || '';
     }
   }
 
-  const imageData = imageFile ? await readImageFileAsDataURL(imageFile) : existingImage;
+  const uploadedImagePath = imageFile
+    ? await uploadPhraseImage(imageFile, phraseId)
+    : existingImagePath;
 
   const payload = {
     id: phraseId,
     category: categoryKey,
     text_en: textEn,
     text_ms: textMs,
-    image_path: imageData || null,
+    image_path: uploadedImagePath || null,
     created_by: currentAdminUser?.id || null
   };
 
