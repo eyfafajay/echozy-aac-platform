@@ -50,8 +50,21 @@ let currentCategory = 'urgent';
 let currentAudio = null;
 
 const DEFAULT_IMAGE = '../../assets/images/placeholders/defaultPV.png';
-const ADMIN_PHRASES_STORAGE_KEY = 'echozyAdminPhrases';
-const ADMIN_VOCABULARY_STORAGE_KEY = 'echozyAdminVocabulary';
+const PHRASE_BUCKET_NAME = 'phrase-images';
+const VOCABULARY_BUCKET_NAME = 'vocabulary-images';
+
+const SUPABASE_URL = 'https://drvmfnlaxkcqbwoqjefu.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4ugmgc1ktCaLEmwB1ttnbA_XjOCtqDm';
+
+const supabaseClient =
+  window.supabase && SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true
+        }
+      })
+    : null;
 
 const MIN_CARD_SCALE = 80;
 const MAX_CARD_SCALE = 150;
@@ -250,30 +263,6 @@ if (practicePatientStatus) {
   );
 }
 
-function getStoredPhrases() {
-  return JSON.parse(localStorage.getItem('echozyPhrases') || '{}');
-}
-
-function getStoredVocabulary() {
-  return JSON.parse(localStorage.getItem('echozyVocabulary') || '{}');
-}
-
-function getStoredAdminPhrases() {
-  const stored = JSON.parse(localStorage.getItem(ADMIN_PHRASES_STORAGE_KEY) || '{}');
-  return {
-    ...createEmptyPhraseData(),
-    ...stored
-  };
-}
-
-function getStoredAdminVocabulary() {
-  const stored = JSON.parse(localStorage.getItem(ADMIN_VOCABULARY_STORAGE_KEY) || '{}');
-  return {
-    ...createEmptyVocabularyData(),
-    ...stored
-  };
-}
-
 function getStoredPracticeClickCounts() {
   return JSON.parse(localStorage.getItem('echozyPracticeClickCounts') || '{}');
 }
@@ -397,34 +386,133 @@ function recordQuitSession() {
   saveStoredSessionLogs(allSessionLogs);
 }
 
-function getPatientPhrases() {
-  const allPhrases = getStoredPhrases();
-  const patientPhrases = allPhrases[patientId] || createEmptyPhraseData();
-  const adminPhrases = getStoredAdminPhrases();
+async function createSignedImageUrl(bucketName, imagePath) {
+  if (!imagePath) {
+    return DEFAULT_IMAGE;
+  }
+
+  if (
+    imagePath.startsWith('http://') ||
+    imagePath.startsWith('https://') ||
+    imagePath.startsWith('data:')
+  ) {
+    return imagePath;
+  }
+
+  const { data, error } = await supabaseClient.storage
+    .from(bucketName)
+    .createSignedUrl(imagePath, 60 * 60);
+
+  if (error) {
+    console.error(error);
+    return DEFAULT_IMAGE;
+  }
+
+  return data?.signedUrl || DEFAULT_IMAGE;
+}
+
+async function getAllAdminPhrases() {
+  const { data, error } = await supabaseClient
+    .from('admin_phrases')
+    .select('*')
+    .order('id', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function getAllAdminVocabulary() {
+  const { data, error } = await supabaseClient
+    .from('admin_vocabulary')
+    .select('*')
+    .order('id', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function getAllPatientPhrases() {
+  const { data, error } = await supabaseClient
+    .from('patient_phrases')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function getAllPatientVocabulary() {
+  const { data, error } = await supabaseClient
+    .from('patient_vocabulary')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function getPatientPhrases() {
+  const adminPhrases = await getAllAdminPhrases();
+  const patientPhrases = await getAllPatientPhrases();
   const merged = createEmptyPhraseData();
 
-  Object.keys(merged).forEach((category) => {
-    merged[category] = [
-      ...(adminPhrases[category] || []),
-      ...(patientPhrases[category] || [])
-    ];
-  });
+  for (const phrase of adminPhrases) {
+    if (!merged[phrase.category]) continue;
+
+    merged[phrase.category].push({
+      id: phrase.id,
+      text: phrase.text_en,
+      textEn: phrase.text_en,
+      textMs: phrase.text_ms,
+      image: await createSignedImageUrl(PHRASE_BUCKET_NAME, phrase.image_path || '')
+    });
+  }
+
+  for (const phrase of patientPhrases) {
+    if (!merged[phrase.category]) continue;
+
+    merged[phrase.category].push({
+      id: phrase.id,
+      text: phrase.text_en,
+      textEn: phrase.text_en,
+      textMs: phrase.text_ms,
+      image: await createSignedImageUrl(PHRASE_BUCKET_NAME, phrase.image_path || '')
+    });
+  }
 
   return merged;
 }
 
-function getPatientVocabulary() {
-  const allVocabulary = getStoredVocabulary();
-  const patientVocabulary = allVocabulary[patientId] || createEmptyVocabularyData();
-  const adminVocabulary = getStoredAdminVocabulary();
+async function getPatientVocabulary() {
+  const adminVocabulary = await getAllAdminVocabulary();
+  const patientVocabulary = await getAllPatientVocabulary();
   const merged = createEmptyVocabularyData();
 
-  Object.keys(merged).forEach((category) => {
-    merged[category] = [
-      ...(adminVocabulary[category] || []),
-      ...(patientVocabulary[category] || [])
-    ];
-  });
+  for (const item of adminVocabulary) {
+    if (!merged[item.category]) continue;
+
+    merged[item.category].push({
+      id: item.id,
+      text: item.text_en,
+      textEn: item.text_en,
+      textMs: item.text_ms,
+      image: await createSignedImageUrl(VOCABULARY_BUCKET_NAME, item.image_path || '')
+    });
+  }
+
+  for (const item of patientVocabulary) {
+    if (!merged[item.category]) continue;
+
+    merged[item.category].push({
+      id: item.id,
+      text: item.text_en,
+      textEn: item.text_en,
+      textMs: item.text_ms,
+      image: await createSignedImageUrl(VOCABULARY_BUCKET_NAME, item.image_path || '')
+    });
+  }
 
   return merged;
 }
@@ -469,8 +557,8 @@ function getCategoryThemeClass(category) {
   return practiceCategoryThemeMap[category] || 'board-theme-default';
 }
 
-function getCurrentData() {
-  return currentType === 'phrases' ? getPatientPhrases() : getPatientVocabulary();
+async function getCurrentData() {
+  return currentType === 'phrases' ? await getPatientPhrases() : await getPatientVocabulary();
 }
 
 function getCurrentLabels() {
@@ -513,10 +601,10 @@ function setProgressBarWidths(successBar, unsuccessfulBar, successWidth, unsucce
   }
 }
 
-function updatePracticeSummary() {
+async function updatePracticeSummary() {
   const patientPracticeResults = getPatientPracticeResults();
-  const phraseData = getPatientPhrases();
-  const vocabularyData = getPatientVocabulary();
+  const phraseData = await getPatientPhrases();
+  const vocabularyData = await getPatientVocabulary();
 
   const totalPhraseItems = countAllItems(phraseData);
   const totalVocabularyItems = countAllItems(vocabularyData);
@@ -611,9 +699,9 @@ function updatePracticeSummary() {
   );
 }
 
-function renderCategories() {
+async function renderCategories() {
   const labels = getCurrentLabels();
-  const data = getCurrentData();
+  const data = await getCurrentData();
   const categoryKeys = Object.keys(labels);
 
   if (!currentCategory || !labels[currentCategory]) {
@@ -633,10 +721,10 @@ function renderCategories() {
 
   const categoryButtons = practiceCategoryList.querySelectorAll('[data-category]');
   categoryButtons.forEach((button) => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       currentCategory = button.dataset.category;
-      renderCategories();
-      renderPracticeCards();
+      await renderCategories();
+      await renderPracticeCards();
     });
   });
 }
@@ -653,9 +741,9 @@ function getResultButtonLabel(resultState) {
   return 'Set Result';
 }
 
-function renderPracticeCards() {
+async function renderPracticeCards() {
   const labels = getCurrentLabels();
-  const data = getCurrentData();
+  const data = await getCurrentData();
   const patientPracticeClicks = getPatientPracticeClickCounts();
 
   const items = data[currentCategory] || [];
@@ -753,15 +841,15 @@ function renderPracticeCards() {
 }
 
 practiceTabButtons.forEach((button) => {
-  button.addEventListener('click', () => {
+  button.addEventListener('click', async () => {
     practiceTabButtons.forEach((btn) => btn.classList.remove('active-board-tab'));
     button.classList.add('active-board-tab');
 
     currentType = button.dataset.practiceType;
     currentCategory = currentType === 'phrases' ? 'urgent' : 'people';
 
-    renderCategories();
-    renderPracticeCards();
+    await renderCategories();
+    await renderPracticeCards();
   });
 });
 
@@ -783,7 +871,13 @@ if (increaseCardSizeBtn) {
   });
 }
 
-updatePracticeSummary();
-renderCategories();
-renderPracticeCards();
-applyCardScale();
+async function initializePracticeDashboardPage() {
+  await updatePracticeSummary();
+  await renderCategories();
+  await renderPracticeCards();
+  applyCardScale();
+}
+
+initializePracticeDashboardPage().catch((error) => {
+  console.error(error);
+});
