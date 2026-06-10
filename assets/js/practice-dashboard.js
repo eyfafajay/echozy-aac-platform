@@ -133,13 +133,27 @@ function getTextByLanguage(item, language) {
 }
 
 async function speakCardWithOpenAITTS(text) {
-  if (!text) return;
+  if (!text || !supabaseClient) return;
 
   try {
-    const response = await fetch('http://localhost:3000/tts', {
+    const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+
+    if (sessionError) {
+      throw sessionError;
+    }
+
+    const accessToken = sessionData?.session?.access_token;
+
+    if (!accessToken) {
+      throw new Error('No active session found for TTS request.');
+    }
+
+    const response = await fetch('https://drvmfnlaxkcqbwoqjefu.supabase.co/functions/v1/tts', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+        'apikey': SUPABASE_PUBLISHABLE_KEY
       },
       body: JSON.stringify({
         text,
@@ -175,7 +189,7 @@ async function speakCardWithOpenAITTS(text) {
 
     await currentAudio.play();
   } catch (error) {
-    console.error('Practice Dashboard card TTS error:', error);
+    console.error('Phrases & Vocabulary card TTS error:', error);
   }
 }
 
