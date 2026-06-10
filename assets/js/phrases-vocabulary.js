@@ -53,11 +53,6 @@ const supabaseClient =
       })
     : null;
 
-const TTS_BASE_URL =
-  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:54321/functions/v1'
-    : 'https://drvmfnlaxkcqbwoqjefu.supabase.co/functions/v1';
-
 const MIN_CARD_SCALE = 80;
 const MAX_CARD_SCALE = 150;
 const CARD_SCALE_STEP = 10;
@@ -132,23 +127,18 @@ async function speakCardWithOpenAITTS(text) {
   if (!text) return;
 
   try {
-    const response = await fetch(`${TTS_BASE_URL}/tts`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
+    const { data, error } = await supabaseClient.functions.invoke('tts', {
+      body: {
         text,
         language: getTtsLanguageCode()
-      })
+      }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Failed to generate speech.');
+    if (error) {
+      throw error;
     }
 
-    const audioBlob = await response.blob();
+    const audioBlob = data instanceof Blob ? data : new Blob([data], { type: 'audio/mpeg' });
     const audioUrl = URL.createObjectURL(audioBlob);
 
     if (currentAudio) {
