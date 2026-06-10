@@ -22,8 +22,8 @@ passwordToggleButtons.forEach((button) => {
 });
 
 /* SUPABASE SETUP */
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_PUBLISHABLE_KEY';
+const SUPABASE_URL = 'https://drvmfnlaxkcqbwoqjefu.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_4ugmgc1ktCaLEmwB1ttnbA_XjOCtqDm';
 
 if (!window.supabase || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error('Supabase is not initialized. Please add the CDN script and project keys.');
