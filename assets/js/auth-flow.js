@@ -21,6 +21,24 @@ passwordToggleButtons.forEach((button) => {
   });
 });
 
+/* SUPABASE SETUP */
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_PUBLISHABLE_KEY';
+
+if (!window.supabase || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error('Supabase is not initialized. Please add the CDN script and project keys.');
+}
+
+const supabaseClient =
+  window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true
+        }
+      })
+    : null;
+
 /* HELPERS */
 function getNameFromEmail(email) {
   if (!email || !email.includes('@')) return 'User';
@@ -38,54 +56,11 @@ function showError(error) {
   alert(error?.message || 'Something went wrong. Please try again.');
 }
 
-function getStoredUsers() {
-  return JSON.parse(localStorage.getItem('echozyUsers') || '{}');
-}
-
-function saveStoredUsers(users) {
-  localStorage.setItem('echozyUsers', JSON.stringify(users));
-}
-
-function generateUserId(role) {
-  const prefix = role === 'provider' ? 'HP' : 'CG';
-  const users = Object.values(getStoredUsers());
-
-  const numbers = users
-    .filter((user) => user.role === role && typeof user.userId === 'string')
-    .map((user) => {
-      const matched = user.userId.match(/\d+/);
-      return matched ? parseInt(matched[0], 10) : 0;
-    });
-
-  const nextNumber = numbers.length ? Math.max(...numbers) + 1 : 1;
-  return `${prefix}${String(nextNumber).padStart(4, '0')}`;
-}
-
-function emailExists(email) {
-  const users = getStoredUsers();
-  return Object.values(users).some(
-    (user) => user.email.toLowerCase() === email.toLowerCase()
-  );
-}
-
-function findUserByEmail(email) {
-  const users = getStoredUsers();
-  return Object.values(users).find(
-    (user) => user.email.toLowerCase() === email.toLowerCase()
-  ) || null;
-}
-
-function saveUserProfile(userData) {
-  const users = getStoredUsers();
-  users[userData.userId] = userData;
-  saveStoredUsers(users);
-}
-
 function storeSession(profile) {
   localStorage.setItem(
     'echozySession',
     JSON.stringify({
-      userId: profile.userId,
+      userId: profile.userId || profile.id || '',
       email: profile.email,
       fullName: profile.fullName || getNameFromEmail(profile.email),
       role: profile.role || 'caregiver',
@@ -98,9 +73,14 @@ function goToDashboard(profile) {
   const role = profile?.role || 'caregiver';
   const fullName = profile?.fullName || getNameFromEmail(profile.email);
 
+  if (role === 'admin') {
+    window.location.href = '../admin/admin-dashboard.html';
+    return;
+  }
+
   const query = new URLSearchParams({
     role,
-    userId: profile.userId,
+    userId: profile.userId || profile.id || '',
     name: fullName,
     email: profile.email
   }).toString();
@@ -108,11 +88,112 @@ function goToDashboard(profile) {
   window.location.href = `../main/dashboard.html?${query}`;
 }
 
+async function getCurrentUserProfile() {
+  if (!supabaseClient) {
+    throw new Error('Supabase client is not available.');
+  }
+
+  const {
+    data: { user },
+    error: userError
+  } = await supabaseClient.auth.getUser();
+
+  if (userError) {
+    throw userError;
+  }
+
+  if (!user) {
+    throw new Error('No authenticated user found.');
+  }
+
+  const { data: profile, error: profileError } = await supabaseClient
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError) {
+    throw profileError;
+  }
+
+  return {
+    id: user.id,
+    userId: user.id,
+    email: user.email || '',
+    fullName: profile.full_name || getNameFromEmail(user.email || ''),
+    role: profile.role || 'caregiver',
+    staffId: profile.license || '',
+    phone: profile.phone || '',
+    gender: profile.gender || '',
+    organization: profile.organization || '',
+    department: profile.department || '',
+    position: profile.position || '',
+    license: profile.license || ''
+  };
+}
+
+async function signUpUser({
+  fullName,
+  email,
+  password,
+  role,
+  phone = null,
+  gender = null,
+  organization = null,
+  department = null,
+  position = null,
+  license = null
+}) {
+  if (!supabaseClient) {
+    throw new Error('Supabase client is not available.');
+  }
+
+  const { data, error } = await supabaseClient.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+        role,
+        phone,
+        gender,
+        organization,
+        department,
+        position,
+        license
+      }
+    }
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function signInUser(email, password) {
+  if (!supabaseClient) {
+    throw new Error('Supabase client is not available.');
+  }
+
+  const { data, error } = await supabaseClient.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
 /* CAREGIVER SIGN UP */
 const caregiverSignUpForm = document.getElementById('caregiverSignUpForm');
 
 if (caregiverSignUpForm) {
-  caregiverSignUpForm.addEventListener('submit', (event) => {
+  caregiverSignUpForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
     const fullName = document.getElementById('caregiver-fullname')?.value.trim();
@@ -130,32 +211,16 @@ if (caregiverSignUpForm) {
       return;
     }
 
-    if (emailExists(email)) {
-      alert('An account with this email already exists.');
-      return;
-    }
-
     try {
-      const userProfile = {
-        userId: generateUserId('caregiver'),
+      await signUpUser({
         fullName,
         email,
         password,
-        role: 'caregiver',
-        staffId: '',
-        phone: '',
-        gender: '',
-        organization: '',
-        department: '',
-        position: '',
-        license: '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
+        role: 'caregiver'
+      });
 
-      saveUserProfile(userProfile);
-      storeSession(userProfile);
-      goToDashboard(userProfile);
+      alert('Account created successfully. Please check your email if confirmation is required, then sign in.');
+      window.location.href = 'caregiver-signin.html';
     } catch (error) {
       showError(error);
     }
@@ -166,7 +231,7 @@ if (caregiverSignUpForm) {
 const caregiverSignInForm = document.getElementById('caregiverSignInForm');
 
 if (caregiverSignInForm) {
-  caregiverSignInForm.addEventListener('submit', (event) => {
+  caregiverSignInForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
     const email = document.getElementById('caregiver-email')?.value.trim();
@@ -178,31 +243,17 @@ if (caregiverSignInForm) {
     }
 
     try {
-      const profile = findUserByEmail(email);
+      await signInUser(email, password);
+      const profile = await getCurrentUserProfile();
 
-      if (!profile || profile.role !== 'caregiver') {
-        alert('No caregiver account found for this email.');
+      if (profile.role !== 'caregiver') {
+        await supabaseClient.auth.signOut();
+        alert('This account is not registered as a caregiver.');
         return;
       }
 
-      if (profile.password !== password) {
-        alert('Incorrect password.');
-        return;
-      }
-
-      const safeProfile = {
-        ...profile,
-        fullName: profile.fullName || getNameFromEmail(profile.email),
-        phone: profile.phone || '',
-        gender: profile.gender || '',
-        organization: profile.organization || '',
-        department: profile.department || '',
-        position: profile.position || '',
-        license: profile.license || ''
-      };
-
-      storeSession(safeProfile);
-      goToDashboard(safeProfile);
+      storeSession(profile);
+      goToDashboard(profile);
     } catch (error) {
       showError(error);
     }
@@ -213,7 +264,7 @@ if (caregiverSignInForm) {
 const providerSignUpForm = document.getElementById('providerSignUpForm');
 
 if (providerSignUpForm) {
-  providerSignUpForm.addEventListener('submit', (event) => {
+  providerSignUpForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
     const fullName = document.getElementById('provider-fullname')?.value.trim();
@@ -232,44 +283,28 @@ if (providerSignUpForm) {
       return;
     }
 
-    if (emailExists(email)) {
-      alert('An account with this email already exists.');
-      return;
-    }
-
     try {
-      const userProfile = {
-        userId: generateUserId('provider'),
+      await signUpUser({
         fullName,
-        staffId,
         email,
         password,
         role: 'provider',
-        phone: '',
-        gender: '',
-        organization: '',
-        department: '',
-        position: '',
-        license: '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
+        license: staffId
+      });
 
-      saveUserProfile(userProfile);
-      storeSession(userProfile);
-      goToDashboard(userProfile);
+      alert('Account created successfully. Please check your email if confirmation is required, then sign in.');
+      window.location.href = 'provider-signin.html';
     } catch (error) {
       showError(error);
     }
   });
 }
 
-
 /* PROVIDER SIGN IN */
 const providerSignInForm = document.getElementById('providerSignInForm');
 
 if (providerSignInForm) {
-  providerSignInForm.addEventListener('submit', (event) => {
+  providerSignInForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
     const email = document.getElementById('provider-email')?.value.trim();
@@ -281,43 +316,28 @@ if (providerSignInForm) {
     }
 
     try {
-      const profile = findUserByEmail(email);
+      await signInUser(email, password);
+      const profile = await getCurrentUserProfile();
 
-      if (!profile || profile.role !== 'provider') {
-        alert('No healthcare provider account found for this email.');
+      if (profile.role !== 'provider') {
+        await supabaseClient.auth.signOut();
+        alert('This account is not registered as a healthcare provider.');
         return;
       }
 
-      if (profile.password !== password) {
-        alert('Incorrect password.');
-        return;
-      }
-
-      const safeProfile = {
-        ...profile,
-        fullName: profile.fullName || getNameFromEmail(profile.email),
-        phone: profile.phone || '',
-        gender: profile.gender || '',
-        organization: profile.organization || '',
-        department: profile.department || '',
-        position: profile.position || '',
-        license: profile.license || ''
-      };
-
-      storeSession(safeProfile);
-      goToDashboard(safeProfile);
+      storeSession(profile);
+      goToDashboard(profile);
     } catch (error) {
       showError(error);
     }
   });
 }
 
-
 /* ADMIN SIGN IN */
 const adminSignInForm = document.getElementById('adminSignInForm');
 
 if (adminSignInForm) {
-  adminSignInForm.addEventListener('submit', (event) => {
+  adminSignInForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
     const email = document.getElementById('admin-email')?.value.trim();
@@ -328,25 +348,20 @@ if (adminSignInForm) {
       return;
     }
 
-    const defaultAdmin = {
-      userId: 'ADM0001',
-      fullName: 'Echozy Admin',
-      email: 'admin@echozy.com',
-      password: 'admin123',
-      role: 'admin',
-      staffId: 'ADM0001'
-    };
+    try {
+      await signInUser(email, password);
+      const profile = await getCurrentUserProfile();
 
-    if (
-      email.toLowerCase() !== defaultAdmin.email.toLowerCase() ||
-      password !== defaultAdmin.password
-    ) {
-      alert('Invalid admin email or password.');
-      return;
+      if (profile.role !== 'admin') {
+        await supabaseClient.auth.signOut();
+        alert('This account is not registered as an admin.');
+        return;
+      }
+
+      storeSession(profile);
+      goToDashboard(profile);
+    } catch (error) {
+      showError(error);
     }
-
-    storeSession(defaultAdmin);
-
-    window.location.href = '../admin/admin-dashboard.html';
   });
 }
