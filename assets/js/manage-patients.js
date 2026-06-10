@@ -9,6 +9,7 @@ const patientIdInput = document.getElementById('patient-id');
 const patientAgeInput = document.getElementById('patient-age');
 const patientGenderInput = document.getElementById('patient-gender');
 const patientDobInput = document.getElementById('patient-dob');
+const patientNotesInput = document.getElementById('patient-notes');
 
 const patientsGrid = document.getElementById('patientsGrid');
 
@@ -23,6 +24,19 @@ const dashboardNavLink = document.getElementById('dashboardNavLink');
 const managePatientsNavLink = document.getElementById('managePatientsNavLink');
 const settingsNavLink = document.getElementById('settingsNavLink');
 const logoutNavLink = document.getElementById('logoutNavLink');
+
+const SUPABASE_URL = 'https://drvmfnlaxkcqbwoqjefu.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4ugmgc1ktCaLEmwB1ttnbA_XjOCtqDm';
+
+const supabaseClient =
+  window.supabase && SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true
+        }
+      })
+    : null;
 
 const sharedUserQuery = new URLSearchParams({
   role: currentRole,
@@ -46,17 +60,17 @@ if (settingsNavLink) {
 }
 
 if (logoutNavLink) {
-  logoutNavLink.addEventListener('click', () => {
-    localStorage.removeItem('echozySession');
+  logoutNavLink.addEventListener('click', async () => {
+    try {
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      localStorage.removeItem('echozySession');
+    }
   });
-}
-
-function getStoredPatients() {
-  return JSON.parse(localStorage.getItem('echozyPatients') || '{}');
-}
-
-function saveStoredPatients(patients) {
-  localStorage.setItem('echozyPatients', JSON.stringify(patients));
 }
 
 function calculateAgeFromDob(dobValue) {
@@ -84,10 +98,23 @@ function getAvatarByGender(gender) {
     : '../../assets/images/avatars/male.png';
 }
 
-function renderPatientsFromStorage() {
+async function getAllPatients() {
+  const { data, error } = await supabaseClient
+    .from('patients')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+}
+
+async function renderPatientsFromSupabase() {
   if (!patientsGrid) return;
 
-  const patients = Object.values(getStoredPatients());
+  const patients = await getAllPatients();
 
   if (!patients.length) {
     patientsGrid.innerHTML = `
@@ -99,9 +126,9 @@ function renderPatientsFromStorage() {
   patientsGrid.innerHTML = patients.map((patient) => {
     const patientQuery = new URLSearchParams({
       patient: patient.id,
-      name: patient.name,
-      status: patient.status,
-      language: patient.preferredLanguage || 'English',
+      name: patient.full_name,
+      status: patient.status || 'Inactive',
+      language: patient.preferred_language || 'English',
       role: currentRole,
       userId: currentUserId,
       user: currentName
@@ -111,13 +138,13 @@ function renderPatientsFromStorage() {
       <a href="patient-dashboard.html?${patientQuery}" class="patient-card" data-patient-id="${patient.id}">
         <div class="patient-card-top">
           <div class="patient-avatar-wrapper">
-            <img src="${getAvatarByGender(patient.gender)}" alt="${patient.name}" class="patient-avatar" />
+            <img src="${getAvatarByGender(patient.gender)}" alt="${patient.full_name}" class="patient-avatar" />
           </div>
-          <span class="patient-status ${patient.status === 'Active' ? 'active-status' : 'inactive-status'}"></span>
+          <span class="patient-status ${(patient.status || 'Inactive') === 'Active' ? 'active-status' : 'inactive-status'}"></span>
         </div>
 
         <div class="patient-card-body">
-          <h2>${patient.name}</h2>
+          <h2>${patient.full_name}</h2>
           <p class="patient-id">Patient ID: ${patient.id}</p>
           <p class="patient-meta">${patient.gender} • ${patient.age} years old</p>
         </div>
@@ -159,15 +186,15 @@ if (cancelAddPatientModal && addPatientModal) {
 }
 
 if (addPatientForm) {
-  addPatientForm.addEventListener('submit', (event) => {
+  addPatientForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
-    const patients = getStoredPatients();
     const id = patientIdInput.value.trim();
     const fullName = patientFullName.value.trim();
     const age = patientAgeInput.value.trim();
     const gender = patientGenderInput.value;
     const dob = patientDobInput.value;
+    const notes = patientNotesInput ? patientNotesInput.value.trim() : '';
 
     if (!currentUserId) {
       alert('No active user session found. Please sign in again.');
@@ -184,46 +211,66 @@ if (addPatientForm) {
       return;
     }
 
-    if (patients[id]) {
-      alert('A patient with this ID already exists.');
-      return;
+    try {
+      const { data: existingPatient, error: existingError } = await supabaseClient
+        .from('patients')
+        .select('id')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (existingError) {
+        throw existingError;
+      }
+
+      if (existingPatient) {
+        alert('A patient with this ID already exists.');
+        return;
+      }
+
+      const { error: insertError } = await supabaseClient
+        .from('patients')
+        .insert({
+          id,
+          created_by: currentUserId,
+          full_name: fullName,
+          dob,
+          age: Number(age),
+          gender,
+          preferred_language: 'English',
+          notes: notes || null,
+          status: 'Inactive'
+        });
+
+      if (insertError) {
+        throw insertError;
+      }
+
+      await renderPatientsFromSupabase();
+
+      addPatientModal.classList.remove('active');
+      addPatientForm.reset();
+
+      if (patientAgeInput) {
+        patientAgeInput.value = '';
+      }
+
+      alert('Patient added successfully.');
+
+      const newPatientQuery = new URLSearchParams({
+        patient: id,
+        name: fullName,
+        status: 'Inactive',
+        language: 'English',
+        role: currentRole,
+        userId: currentUserId,
+        user: currentName
+      }).toString();
+
+      window.location.href = `patient-dashboard.html?${newPatientQuery}`;
+    } catch (error) {
+      console.error(error);
+      alert(error.message || 'Something went wrong while saving the patient.');
     }
-
-    const newPatient = {
-      id,
-      name: fullName,
-      gender,
-      age,
-      dob,
-      status: 'Inactive',
-      preferredLanguage: 'English',
-      avatar: getAvatarByGender(gender)
-    };
-
-    patients[id] = newPatient;
-    saveStoredPatients(patients);
-    renderPatientsFromStorage();
-
-    addPatientModal.classList.remove('active');
-    addPatientForm.reset();
-
-    if (patientAgeInput) {
-      patientAgeInput.value = '';
-    }
-
-    alert('Patient added successfully.');
-
-    const newPatientQuery = new URLSearchParams({
-      patient: id,
-      name: fullName,
-      status: 'Inactive',
-      language: 'English',
-      role: currentRole,
-      userId: currentUserId,
-      user: currentName
-    }).toString();
-
-    window.location.href = `patient-dashboard.html?${newPatientQuery}`;
   });
 }
 
@@ -235,4 +282,11 @@ if (addPatientModal) {
   });
 }
 
-renderPatientsFromStorage();
+renderPatientsFromSupabase().catch((error) => {
+  console.error(error);
+  if (patientsGrid) {
+    patientsGrid.innerHTML = `
+      <div class="board-empty-state">Unable to load patients right now.</div>
+    `;
+  }
+});
