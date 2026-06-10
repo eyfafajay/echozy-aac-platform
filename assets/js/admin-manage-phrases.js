@@ -22,7 +22,18 @@ const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
 
 const DEFAULT_PHRASE_IMAGE = '../../assets/images/placeholders/defaultPV.png';
 
-const ADMIN_PHRASES_STORAGE_KEY = 'echozyAdminPhrases';
+const SUPABASE_URL = 'https://drvmfnlaxkcqbwoqjefu.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4ugmgc1ktCaLEmwB1ttnbA_XjOCtqDm';
+
+const supabaseClient =
+  window.supabase && SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true
+        }
+      })
+    : null;
 
 const phraseCategories = {
   urgent: 'Urgent Needs',
@@ -71,30 +82,11 @@ const phraseCardClassMap = {
 let currentCategory = 'urgent';
 let editingPhraseId = null;
 let phraseToDelete = null;
+let currentAdminUser = null;
 
-function createEmptyAdminPhraseData() {
-  return {
-    urgent: [],
-    basic: [],
-    feelings: [],
-    physical: [],
-    daily: [],
-    social: [],
-    rehab: [],
-    activities: []
-  };
-}
-
-function getStoredAdminPhrases() {
-  const stored = JSON.parse(localStorage.getItem(ADMIN_PHRASES_STORAGE_KEY) || '{}');
-  return {
-    ...createEmptyAdminPhraseData(),
-    ...stored
-  };
-}
-
-function saveStoredAdminPhrases(data) {
-  localStorage.setItem(ADMIN_PHRASES_STORAGE_KEY, JSON.stringify(data));
+function showError(error) {
+  console.error(error);
+  alert(error?.message || 'Something went wrong. Please try again.');
 }
 
 function populateCategoryOptions() {
@@ -108,11 +100,96 @@ function populateCategoryOptions() {
   `;
 }
 
-function generateNextPhraseId() {
-  const allPhrases = getStoredAdminPhrases();
+async function loadCurrentAdminUser() {
+  if (!supabaseClient) {
+    throw new Error('Supabase client is not available. Please load the Supabase CDN before this script.');
+  }
 
-  const existingIds = Object.values(allPhrases)
-    .flat()
+  const {
+    data: { user },
+    error: userError
+  } = await supabaseClient.auth.getUser();
+
+  if (userError) {
+    throw userError;
+  }
+
+  if (!user) {
+    throw new Error('No signed-in admin found. Please sign in again.');
+  }
+
+  const { data: profile, error: profileError } = await supabaseClient
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError) {
+    throw profileError;
+  }
+
+  if (profile.role !== 'admin') {
+    throw new Error('Only admin accounts can manage default phrases.');
+  }
+
+  currentAdminUser = {
+    id: user.id,
+    email: user.email || '',
+    profile
+  };
+}
+
+async function getAllAdminPhrases() {
+  if (!supabaseClient) {
+    throw new Error('Supabase client is not available.');
+  }
+
+  const { data, error } = await supabaseClient
+    .from('admin_phrases')
+    .select('*')
+    .order('id', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+}
+
+async function getGroupedAdminPhrases() {
+  const phrases = await getAllAdminPhrases();
+
+  const grouped = {
+    urgent: [],
+    basic: [],
+    feelings: [],
+    physical: [],
+    daily: [],
+    social: [],
+    rehab: [],
+    activities: []
+  };
+
+  phrases.forEach((phrase) => {
+    if (!grouped[phrase.category]) {
+      return;
+    }
+
+    grouped[phrase.category].push({
+      id: phrase.id,
+      textEn: phrase.text_en,
+      textMs: phrase.text_ms,
+      image: phrase.image_path || ''
+    });
+  });
+
+  return grouped;
+}
+
+async function generateNextPhraseId() {
+  const phrases = await getAllAdminPhrases();
+
+  const existingIds = phrases
     .map((phrase) => phrase.id)
     .filter((id) => /^PH\d{4}$/.test(id))
     .map((id) => parseInt(id.replace('PH', ''), 10));
@@ -137,7 +214,7 @@ function readImageFileAsDataURL(file) {
   });
 }
 
-function openAddModal() {
+async function openAddModal() {
   editingPhraseId = null;
 
   if (modalTitle) {
@@ -149,7 +226,7 @@ function openAddModal() {
   }
 
   if (contentIdInput) {
-    contentIdInput.value = generateNextPhraseId();
+    contentIdInput.value = await generateNextPhraseId();
   }
 
   if (contentCategoryInput) {
@@ -183,25 +260,30 @@ function closeDeleteModal() {
   }
 }
 
-function findPhraseById(phraseId) {
-  const allPhrases = getStoredAdminPhrases();
+async function findPhraseById(phraseId) {
+  const { data, error } = await supabaseClient
+    .from('admin_phrases')
+    .select('*')
+    .eq('id', phraseId)
+    .single();
 
-  for (const [categoryKey, items] of Object.entries(allPhrases)) {
-    const foundPhrase = items.find((item) => item.id === phraseId);
-
-    if (foundPhrase) {
-      return {
-        phrase: foundPhrase,
-        categoryKey
-      };
-    }
+  if (error) {
+    throw error;
   }
 
-  return null;
+  return {
+    phrase: {
+      id: data.id,
+      textEn: data.text_en,
+      textMs: data.text_ms,
+      image: data.image_path || ''
+    },
+    categoryKey: data.category
+  };
 }
 
-function openEditModal(phraseId) {
-  const found = findPhraseById(phraseId);
+async function openEditModal(phraseId) {
+  const found = await findPhraseById(phraseId);
 
   if (!found) return;
 
@@ -236,28 +318,30 @@ function openEditModal(phraseId) {
   }
 }
 
-function deletePhrase(phraseId) {
-  const allPhrases = getStoredAdminPhrases();
+async function deletePhrase(phraseId) {
+  const { error } = await supabaseClient
+    .from('admin_phrases')
+    .delete()
+    .eq('id', phraseId);
 
-  Object.keys(allPhrases).forEach((categoryKey) => {
-    allPhrases[categoryKey] = allPhrases[categoryKey].filter((item) => item.id !== phraseId);
-  });
+  if (error) {
+    throw error;
+  }
 
-  saveStoredAdminPhrases(allPhrases);
-  renderCategoryList();
-  renderPhraseCards(currentCategory);
+  await renderCategoryList();
+  await renderPhraseCards(currentCategory);
 }
 
-function setActiveCategory(selectedCategory) {
+async function setActiveCategory(selectedCategory) {
   currentCategory = selectedCategory;
-  renderCategoryList();
-  renderPhraseCards(selectedCategory);
+  await renderCategoryList();
+  await renderPhraseCards(selectedCategory);
 }
 
-function renderCategoryList() {
+async function renderCategoryList() {
   if (!categoryList) return;
 
-  const allPhrases = getStoredAdminPhrases();
+  const allPhrases = await getGroupedAdminPhrases();
 
   categoryList.innerHTML = Object.entries(phraseCategories).map(([key, label]) => {
     const count = (allPhrases[key] || []).length;
@@ -278,16 +362,16 @@ function renderCategoryList() {
 
   const buttons = categoryList.querySelectorAll('[data-category]');
   buttons.forEach((button) => {
-    button.addEventListener('click', () => {
-      setActiveCategory(button.dataset.category);
+    button.addEventListener('click', async () => {
+      await setActiveCategory(button.dataset.category);
     });
   });
 }
 
-function renderPhraseCards(categoryKey) {
+async function renderPhraseCards(categoryKey) {
   if (!contentList) return;
 
-  const allPhrases = getStoredAdminPhrases();
+  const allPhrases = await getGroupedAdminPhrases();
   const phrases = allPhrases[categoryKey] || [];
 
   contentList.className = 'phrase-list-panel admin-list-panel';
@@ -323,8 +407,12 @@ function renderPhraseCards(categoryKey) {
 
   const editButtons = contentList.querySelectorAll('[data-edit-id]');
   editButtons.forEach((button) => {
-    button.addEventListener('click', () => {
-      openEditModal(button.dataset.editId);
+    button.addEventListener('click', async () => {
+      try {
+        await openEditModal(button.dataset.editId);
+      } catch (error) {
+        showError(error);
+      }
     });
   });
 
@@ -350,50 +438,80 @@ async function handleSavePhrase(event) {
     return;
   }
 
-  const allPhrases = getStoredAdminPhrases();
   let existingImage = '';
 
   if (editingPhraseId) {
-    const found = findPhraseById(editingPhraseId);
+    const found = await findPhraseById(editingPhraseId);
     if (found) {
       existingImage = found.phrase.image || '';
     }
-
-    Object.keys(allPhrases).forEach((key) => {
-      allPhrases[key] = allPhrases[key].filter((item) => item.id !== editingPhraseId);
-    });
   }
 
   const imageData = imageFile ? await readImageFileAsDataURL(imageFile) : existingImage;
 
-  const savedPhrase = {
+  const payload = {
     id: phraseId,
-    textEn,
-    textMs,
-    image: imageData
+    category: categoryKey,
+    text_en: textEn,
+    text_ms: textMs,
+    image_path: imageData || null,
+    created_by: currentAdminUser?.id || null
   };
 
-  allPhrases[categoryKey].push(savedPhrase);
+  if (editingPhraseId) {
+    const { error } = await supabaseClient
+      .from('admin_phrases')
+      .update({
+        category: payload.category,
+        text_en: payload.text_en,
+        text_ms: payload.text_ms,
+        image_path: payload.image_path
+      })
+      .eq('id', editingPhraseId);
 
-  allPhrases[categoryKey].sort((a, b) => a.id.localeCompare(b.id));
+    if (error) {
+      throw error;
+    }
+  } else {
+    const { error } = await supabaseClient
+      .from('admin_phrases')
+      .insert(payload);
 
-  saveStoredAdminPhrases(allPhrases);
+    if (error) {
+      throw error;
+    }
+  }
+
   closeContentModal();
 
   currentCategory = categoryKey;
-  renderCategoryList();
-  renderPhraseCards(currentCategory);
+  await renderCategoryList();
+  await renderPhraseCards(currentCategory);
 }
 
 if (logoutBtn) {
-  logoutBtn.addEventListener('click', () => {
-    localStorage.removeItem('echozySession');
-    window.location.href = '../auth/admin-signin.html';
+  logoutBtn.addEventListener('click', async () => {
+    try {
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      localStorage.removeItem('echozySession');
+      window.location.href = '../auth/admin-signin.html';
+    }
   });
 }
 
 if (addContentBtn) {
-  addContentBtn.addEventListener('click', openAddModal);
+  addContentBtn.addEventListener('click', async () => {
+    try {
+      await openAddModal();
+    } catch (error) {
+      showError(error);
+    }
+  });
 }
 
 if (closeModalBtn) {
@@ -413,7 +531,13 @@ if (contentModal) {
 }
 
 if (contentForm) {
-  contentForm.addEventListener('submit', handleSavePhrase);
+  contentForm.addEventListener('submit', async (event) => {
+    try {
+      await handleSavePhrase(event);
+    } catch (error) {
+      showError(error);
+    }
+  });
 }
 
 if (cancelDeleteBtn) {
@@ -421,11 +545,15 @@ if (cancelDeleteBtn) {
 }
 
 if (confirmDeleteBtn) {
-  confirmDeleteBtn.addEventListener('click', () => {
-    if (phraseToDelete) {
-      deletePhrase(phraseToDelete);
+  confirmDeleteBtn.addEventListener('click', async () => {
+    if (!phraseToDelete) return;
+
+    try {
+      await deletePhrase(phraseToDelete);
+      closeDeleteModal();
+    } catch (error) {
+      showError(error);
     }
-    closeDeleteModal();
   });
 }
 
@@ -437,6 +565,13 @@ if (deleteModal) {
   });
 }
 
-populateCategoryOptions();
-renderCategoryList();
-renderPhraseCards(currentCategory);
+async function initializeAdminManagePhrasesPage() {
+  await loadCurrentAdminUser();
+  populateCategoryOptions();
+  await renderCategoryList();
+  await renderPhraseCards(currentCategory);
+}
+
+initializeAdminManagePhrasesPage().catch((error) => {
+  showError(error);
+});
