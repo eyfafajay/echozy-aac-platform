@@ -1,8 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-console.log("API Key loaded:", process.env.OPENAI_API_KEY ? "YES" : "NO"); // Temporarily add, can remove later
-
 import express from "express";
 import cors from "cors";
 import OpenAI from "openai";
@@ -17,7 +15,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-app.post("/api/tts", async (req, res) => {
+async function handleTtsRequest(req, res) {
   try {
     const { text, language } = req.body;
 
@@ -45,10 +43,13 @@ app.post("/api/tts", async (req, res) => {
   } catch (error) {
     console.error("TTS error:", error);
     res.status(500).json({
-      error: "Failed to generate speech."
+      error: error?.message || "Failed to generate speech."
     });
   }
-});
+}
+
+app.post("/tts", handleTtsRequest);
+app.post("/api/tts", handleTtsRequest);
 
 app.listen(port, () => {
   console.log(`TTS server running on http://localhost:${port}`);
