@@ -124,21 +124,40 @@ function getTextByLanguage(item, language) {
 }
 
 async function speakCardWithOpenAITTS(text) {
-  if (!text) return;
+  if (!text || !supabaseClient) return;
 
   try {
-    const { data, error } = await supabaseClient.functions.invoke('tts', {
-      body: {
-        text,
-        language: getTtsLanguageCode()
-      }
-    });
+    const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
 
-    if (error) {
-      throw error;
+    if (sessionError) {
+      throw sessionError;
     }
 
-    const audioBlob = data instanceof Blob ? data : new Blob([data], { type: 'audio/mpeg' });
+    const accessToken = sessionData?.session?.access_token;
+
+    if (!accessToken) {
+      throw new Error('No active session found for TTS request.');
+    }
+
+    const response = await fetch('https://drvmfnlaxkcqbwoqjefu.supabase.co/functions/v1/tts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+        'apikey': SUPABASE_PUBLISHABLE_KEY
+      },
+      body: JSON.stringify({
+        text,
+        language: getTtsLanguageCode()
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to generate speech.');
+    }
+
+    const audioBlob = await response.blob();
     const audioUrl = URL.createObjectURL(audioBlob);
 
     if (currentAudio) {
