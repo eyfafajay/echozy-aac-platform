@@ -44,7 +44,7 @@ const vocabularyPatientName = vocabularyParams.get('name') || 'Selected Patient'
 const vocabularyPatientStatus = vocabularyParams.get('status') || 'Active';
 
 const vocabularyUserRole = vocabularyParams.get('role') || storedSession.role || 'caregiver';
-const vocabularyUserId = vocabularyParams.get('userId') || storedSession.userId || 'U0001';
+const vocabularyUserId = vocabularyParams.get('userId') || storedSession.userId || '';
 const vocabularyUserName =
   vocabularyParams.get('user') ||
   vocabularyParams.get('name') ||
@@ -52,11 +52,26 @@ const vocabularyUserName =
   'User';
 
 const DEFAULT_VOCABULARY_IMAGE = '../../assets/images/placeholders/defaultPV.png';
-const ADMIN_VOCABULARY_STORAGE_KEY = 'echozyAdminVocabulary';
+const VOCABULARY_BUCKET_NAME = 'vocabulary-images';
+
+const SUPABASE_URL = 'https://drvmfnlaxkcqbwoqjefu.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4ugmgc1ktCaLEmwB1ttnbA_XjOCtqDm';
+
+const supabaseClient =
+  window.supabase && SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true
+        }
+      })
+    : null;
 
 let currentVocabularyCategory = 'people';
 let vocabularyToDelete = null;
 let vocabularyToEdit = null;
+let currentAuthUser = null;
+let currentUserProfile = null;
 
 if (manageVocabularyHeading) {
   manageVocabularyHeading.textContent = `Manage Vocabulary for ${vocabularyPatientName}`;
@@ -101,9 +116,48 @@ if (backToPatientDashboardFromVocabulary) {
   backToPatientDashboardFromVocabulary.href = `patient-dashboard.html?${backPatientQuery}`;
 }
 
+function showError(error) {
+  console.error(error);
+  alert(error?.message || 'Something went wrong. Please try again.');
+}
+
+async function loadCurrentUserProfile() {
+  if (!supabaseClient) {
+    throw new Error('Supabase client is not available. Please load the Supabase CDN before this script.');
+  }
+
+  const {
+    data: { user },
+    error: userError
+  } = await supabaseClient.auth.getUser();
+
+  if (userError) throw userError;
+  if (!user) throw new Error('No signed-in user found. Please sign in again.');
+
+  currentAuthUser = user;
+
+  const { data: profile, error: profileError } = await supabaseClient
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError) throw profileError;
+
+  currentUserProfile = profile;
+}
+
 if (logoutNavLink) {
-  logoutNavLink.addEventListener('click', () => {
-    localStorage.removeItem('echozySession');
+  logoutNavLink.addEventListener('click', async () => {
+    try {
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      localStorage.removeItem('echozySession');
+    }
   });
 }
 
@@ -118,66 +172,119 @@ function createEmptyVocabularyData() {
   };
 }
 
-function getStoredVocabulary() {
-  return JSON.parse(localStorage.getItem('echozyVocabulary') || '{}');
+async function getAllAdminVocabulary() {
+  const { data, error } = await supabaseClient
+    .from('admin_vocabulary')
+    .select('*')
+    .order('id', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
 }
 
-function saveStoredVocabulary(data) {
-  localStorage.setItem('echozyVocabulary', JSON.stringify(data));
+async function getAllPatientVocabulary() {
+  const { data, error } = await supabaseClient
+    .from('patient_vocabulary')
+    .select('*')
+    .eq('patient_id', vocabularyPatientId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
 }
 
-function getStoredAdminVocabulary() {
-  const stored = JSON.parse(localStorage.getItem(ADMIN_VOCABULARY_STORAGE_KEY) || '{}');
-  return {
-    ...createEmptyVocabularyData(),
-    ...stored
-  };
+async function createVocabularySignedImageUrl(imagePath) {
+  if (!imagePath) {
+    return DEFAULT_VOCABULARY_IMAGE;
+  }
+
+  if (
+    imagePath.startsWith('http://') ||
+    imagePath.startsWith('https://') ||
+    imagePath.startsWith('data:')
+  ) {
+    return imagePath;
+  }
+
+  const { data, error } = await supabaseClient.storage
+    .from(VOCABULARY_BUCKET_NAME)
+    .createSignedUrl(imagePath, 60 * 60);
+
+  if (error) {
+    console.error(error);
+    return DEFAULT_VOCABULARY_IMAGE;
+  }
+
+  return data?.signedUrl || DEFAULT_VOCABULARY_IMAGE;
 }
 
-function getPatientVocabularyFromLocal() {
-  const allVocabulary = getStoredVocabulary();
-  return allVocabulary[vocabularyPatientId] || createEmptyVocabularyData();
-}
-
-function syncPatientVocabularyToLocal(patientVocabulary) {
-  const allVocabulary = getStoredVocabulary();
-  allVocabulary[vocabularyPatientId] = patientVocabulary;
-  saveStoredVocabulary(allVocabulary);
-}
-
-function getMergedPatientVocabulary() {
-  const adminVocabulary = getStoredAdminVocabulary();
-  const patientVocabulary = getPatientVocabularyFromLocal();
+async function getMergedPatientVocabulary() {
+  const adminVocabulary = await getAllAdminVocabulary();
+  const patientVocabulary = await getAllPatientVocabulary();
   const merged = createEmptyVocabularyData();
 
-  Object.keys(merged).forEach((category) => {
-    const adminItems = (adminVocabulary[category] || []).map((item) => ({
-      ...item,
+  for (const item of adminVocabulary) {
+    if (!merged[item.category]) continue;
+
+    merged[item.category].push({
+      id: item.id,
+      text: item.text_en,
+      textEn: item.text_en,
+      textMs: item.text_ms,
+      image: item.image_path || '',
+      imageUrl: await createVocabularySignedImageUrl(item.image_path || ''),
       source: 'admin'
-    }));
+    });
+  }
 
-    const patientItems = (patientVocabulary[category] || []).map((item) => ({
-      ...item,
+  for (const item of patientVocabulary) {
+    if (!merged[item.category]) continue;
+
+    merged[item.category].push({
+      id: item.id,
+      dbId: item.id,
+      text: item.text_en,
+      textEn: item.text_en,
+      textMs: item.text_ms,
+      image: item.image_path || '',
+      imageUrl: await createVocabularySignedImageUrl(item.image_path || ''),
       source: 'personal'
-    }));
-
-    merged[category] = [...adminItems, ...patientItems];
-  });
+    });
+  }
 
   return merged;
 }
 
-function generateNextVocabularyId() {
-  const patientVocabulary = getPatientVocabularyFromLocal();
+async function generateNextVocabularyId() {
+  const patientVocabulary = await getAllPatientVocabulary();
 
-  const existingIds = Object.values(patientVocabulary)
-    .flat()
+  const existingIds = patientVocabulary
     .map((item) => item.id)
     .filter((id) => /^VO\d{4}$/.test(id))
     .map((id) => parseInt(id.replace('VO', ''), 10));
 
   const nextNumber = existingIds.length ? Math.max(...existingIds) + 1 : 1;
   return `VO${String(nextNumber).padStart(4, '0')}`;
+}
+
+async function uploadVocabularyImage(file, vocabularyId) {
+  if (!file) {
+    return '';
+  }
+
+  const safeFileName = file.name.replace(/\s+/g, '-');
+  const filePath = `patients/${vocabularyPatientId}/vocabulary/${vocabularyId}-${Date.now()}-${safeFileName}`;
+
+  const { data, error } = await supabaseClient.storage
+    .from(VOCABULARY_BUCKET_NAME)
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
+
+  if (error) throw error;
+
+  return data.path;
 }
 
 const vocabularyPanelClassMap = {
@@ -207,8 +314,8 @@ const vocabularyCategoryLabelMap = {
   'Actions & Verbs': 'actions'
 };
 
-function updateVocabularyCategoryCounts() {
-  const mergedVocabulary = getMergedPatientVocabulary();
+async function updateVocabularyCategoryCounts() {
+  const mergedVocabulary = await getMergedPatientVocabulary();
 
   vocabularyCategoryButtons.forEach((button) => {
     const category = button.dataset.category;
@@ -239,12 +346,12 @@ function setVocabularyPanelCategory(selectedCategory) {
   }
 }
 
-function renderVocabularyCards(category) {
+async function renderVocabularyCards(category) {
   if (!vocabularyCardsContainer) return;
 
   currentVocabularyCategory = category;
 
-  const mergedVocabulary = getMergedPatientVocabulary();
+  const mergedVocabulary = await getMergedPatientVocabulary();
   const vocabularyItems = mergedVocabulary[category] || [];
   const cardClass = vocabularyCardClassMap[category] || 'vocabulary-people';
 
@@ -255,14 +362,14 @@ function renderVocabularyCards(category) {
     return;
   }
 
-  vocabularyCardsContainer.innerHTML = vocabularyItems.map((item, index) => {
+  vocabularyCardsContainer.innerHTML = vocabularyItems.map((item) => {
     const canEditPersonalVocabulary = item.source === 'personal';
 
     return `
       <div class="vocabulary-card-item ${cardClass}">
         <div class="vocabulary-card-left">
           <div class="vocabulary-icon-circle">
-            <img src="${item.image || DEFAULT_VOCABULARY_IMAGE}" alt="${item.text || item.textEn || ''} vocabulary image" />
+            <img src="${item.imageUrl || DEFAULT_VOCABULARY_IMAGE}" alt="${item.text || item.textEn || ''} vocabulary image" />
           </div>
           <span>${item.text || item.textEn || ''}</span>
         </div>
@@ -274,7 +381,7 @@ function renderVocabularyCards(category) {
                   type="button"
                   class="vocabulary-action-btn edit-vocabulary-btn openEditVocabularyModal"
                   data-category="${category}"
-                  data-index="${index}"
+                  data-id="${item.id}"
                 >
                   Edit
                 </button>
@@ -282,7 +389,7 @@ function renderVocabularyCards(category) {
                   type="button"
                   class="vocabulary-action-btn delete-vocabulary-btn openDeleteVocabularyModal"
                   data-category="${category}"
-                  data-index="${index}"
+                  data-id="${item.id}"
                 >
                   Delete
                 </button>
@@ -302,54 +409,43 @@ function bindVocabularyActionButtons() {
   const openDeleteVocabularyButtons = document.querySelectorAll('.openDeleteVocabularyModal');
 
   openEditVocabularyButtons.forEach((button) => {
-    button.addEventListener('click', () => {
-      const category = button.dataset.category;
-      const index = Number(button.dataset.index);
-      const mergedVocabulary = getMergedPatientVocabulary();
-      const item = mergedVocabulary[category][index];
-
-      if (!item || item.source !== 'personal') return;
-
-      const patientVocabulary = getPatientVocabularyFromLocal();
-      const personalIndex = patientVocabulary[category].findIndex((entry) => entry.id === item.id);
-
-      if (personalIndex < 0) return;
-
-      vocabularyToEdit = { category, index: personalIndex };
-
-      if (editVocabularyIdInput) editVocabularyIdInput.value = item.id || '';
-      if (editVocabularyWordEnInput) editVocabularyWordEnInput.value = item.textEn || item.text || '';
-      if (editVocabularyWordMsInput) editVocabularyWordMsInput.value = item.textMs || '';
-      if (editVocabularyCategoryInput) {
-        const label = Object.keys(vocabularyCategoryLabelMap).find(
-          (key) => vocabularyCategoryLabelMap[key] === category
+    button.addEventListener('click', async () => {
+      try {
+        const category = button.dataset.category;
+        const vocabularyId = button.dataset.id;
+        const mergedVocabulary = await getMergedPatientVocabulary();
+        const item = (mergedVocabulary[category] || []).find(
+          (entry) => entry.id === vocabularyId && entry.source === 'personal'
         );
-        editVocabularyCategoryInput.value = label || '';
-      }
 
-      if (editVocabularyModal) {
-        editVocabularyModal.classList.add('active');
+        if (!item) return;
+
+        vocabularyToEdit = { category, id: vocabularyId };
+
+        if (editVocabularyIdInput) editVocabularyIdInput.value = item.id || '';
+        if (editVocabularyWordEnInput) editVocabularyWordEnInput.value = item.textEn || item.text || '';
+        if (editVocabularyWordMsInput) editVocabularyWordMsInput.value = item.textMs || '';
+        if (editVocabularyCategoryInput) {
+          const label = Object.keys(vocabularyCategoryLabelMap).find(
+            (key) => vocabularyCategoryLabelMap[key] === category
+          );
+          editVocabularyCategoryInput.value = label || '';
+        }
+
+        if (editVocabularyModal) {
+          editVocabularyModal.classList.add('active');
+        }
+      } catch (error) {
+        showError(error);
       }
     });
   });
 
   openDeleteVocabularyButtons.forEach((button) => {
     button.addEventListener('click', () => {
-      const category = button.dataset.category;
-      const index = Number(button.dataset.index);
-      const mergedVocabulary = getMergedPatientVocabulary();
-      const item = mergedVocabulary[category][index];
-
-      if (!item || item.source !== 'personal') return;
-
-      const patientVocabulary = getPatientVocabularyFromLocal();
-      const personalIndex = patientVocabulary[category].findIndex((entry) => entry.id === item.id);
-
-      if (personalIndex < 0) return;
-
       vocabularyToDelete = {
-        category,
-        index: personalIndex
+        category: button.dataset.category,
+        id: button.dataset.id
       };
 
       if (deleteVocabularyModal) {
@@ -360,30 +456,34 @@ function bindVocabularyActionButtons() {
 }
 
 vocabularyCategoryButtons.forEach((button) => {
-  button.addEventListener('click', () => {
+  button.addEventListener('click', async () => {
     const selectedCategory = button.dataset.category;
     setActiveVocabularyCategoryButton(selectedCategory);
     setVocabularyPanelCategory(selectedCategory);
-    renderVocabularyCards(selectedCategory);
+    await renderVocabularyCards(selectedCategory);
   });
 });
 
 if (openAddVocabularyModal && addVocabularyModal) {
-  openAddVocabularyModal.addEventListener('click', () => {
-    if (addVocabularyForm) {
-      addVocabularyForm.reset();
-    }
+  openAddVocabularyModal.addEventListener('click', async () => {
+    try {
+      if (addVocabularyForm) {
+        addVocabularyForm.reset();
+      }
 
-    if (vocabularyIdInput) {
-      vocabularyIdInput.value = generateNextVocabularyId();
-    }
+      if (vocabularyIdInput) {
+        vocabularyIdInput.value = await generateNextVocabularyId();
+      }
 
-    addVocabularyModal.classList.add('active');
+      addVocabularyModal.classList.add('active');
+    } catch (error) {
+      showError(error);
+    }
   });
 }
 
 if (addVocabularyForm) {
-  addVocabularyForm.addEventListener('submit', (event) => {
+  addVocabularyForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
     const vocabularyWordEn = vocabularyWordEnInput ? vocabularyWordEnInput.value.trim() : '';
@@ -395,47 +495,45 @@ if (addVocabularyForm) {
       return;
     }
 
-    const selectedCategory = vocabularyCategoryLabelMap[selectedCategoryLabel];
-    const patientVocabulary = getPatientVocabularyFromLocal();
-    const file = vocabularyImageInput && vocabularyImageInput.files ? vocabularyImageInput.files[0] : null;
+    try {
+      const selectedCategory = vocabularyCategoryLabelMap[selectedCategoryLabel];
+      const file = vocabularyImageInput && vocabularyImageInput.files ? vocabularyImageInput.files[0] : null;
+      const vocabularyId = vocabularyIdInput ? vocabularyIdInput.value : await generateNextVocabularyId();
+      const uploadedImagePath = file
+        ? await uploadVocabularyImage(file, vocabularyId)
+        : null;
 
-    const saveVocabularyItem = (imagePath) => {
-      const newItem = {
-        id: vocabularyIdInput ? vocabularyIdInput.value : generateNextVocabularyId(),
-        text: vocabularyWordEn,
-        textEn: vocabularyWordEn,
-        textMs: vocabularyWordMs,
-        image: imagePath || DEFAULT_VOCABULARY_IMAGE
-      };
+      const { error } = await supabaseClient
+        .from('patient_vocabulary')
+        .insert({
+          id: vocabularyId,
+          patient_id: vocabularyPatientId,
+          category: selectedCategory,
+          text_en: vocabularyWordEn,
+          text_ms: vocabularyWordMs,
+          image_path: uploadedImagePath,
+          created_by: currentAuthUser?.id || vocabularyUserId || null
+        });
 
-      patientVocabulary[selectedCategory].push(newItem);
-      syncPatientVocabularyToLocal(patientVocabulary);
+      if (error) throw error;
 
-      updateVocabularyCategoryCounts();
+      await updateVocabularyCategoryCounts();
       setActiveVocabularyCategoryButton(selectedCategory);
       setVocabularyPanelCategory(selectedCategory);
-      renderVocabularyCards(selectedCategory);
+      await renderVocabularyCards(selectedCategory);
 
       addVocabularyForm.reset();
       if (vocabularyIdInput) vocabularyIdInput.value = '';
       addVocabularyModal.classList.remove('active');
       alert('Vocabulary added successfully.');
-    };
-
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        saveVocabularyItem(reader.result);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      saveVocabularyItem(DEFAULT_VOCABULARY_IMAGE);
+    } catch (error) {
+      showError(error);
     }
   });
 }
 
 if (editVocabularyForm) {
-  editVocabularyForm.addEventListener('submit', (event) => {
+  editVocabularyForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
     if (!vocabularyToEdit) return;
@@ -449,70 +547,68 @@ if (editVocabularyForm) {
       return;
     }
 
-    const newCategory = vocabularyCategoryLabelMap[selectedCategoryLabel];
-    const patientVocabulary = getPatientVocabularyFromLocal();
-    const oldCategory = vocabularyToEdit.category;
-    const oldIndex = vocabularyToEdit.index;
+    try {
+      const newCategory = vocabularyCategoryLabelMap[selectedCategoryLabel];
+      const existingPatientVocabulary = await getAllPatientVocabulary();
+      const existingItem = existingPatientVocabulary.find((item) => item.id === vocabularyToEdit.id);
 
-    const existingItem = patientVocabulary[oldCategory][oldIndex];
-    if (!existingItem) return;
+      if (!existingItem) return;
 
-    const file = editVocabularyImageInput && editVocabularyImageInput.files ? editVocabularyImageInput.files[0] : null;
+      const file = editVocabularyImageInput && editVocabularyImageInput.files ? editVocabularyImageInput.files[0] : null;
+      const uploadedImagePath = file
+        ? await uploadVocabularyImage(file, existingItem.id)
+        : (existingItem.image_path || null);
 
-    const saveEditedVocabulary = (imagePath) => {
-      const updatedItem = {
-        id: existingItem.id,
-        text: updatedWordEn,
-        textEn: updatedWordEn,
-        textMs: updatedWordMs,
-        image: imagePath || existingItem.image || DEFAULT_VOCABULARY_IMAGE
-      };
+      const { error } = await supabaseClient
+        .from('patient_vocabulary')
+        .update({
+          category: newCategory,
+          text_en: updatedWordEn,
+          text_ms: updatedWordMs,
+          image_path: uploadedImagePath
+        })
+        .eq('id', existingItem.id)
+        .eq('patient_id', vocabularyPatientId);
 
-      patientVocabulary[oldCategory].splice(oldIndex, 1);
-      patientVocabulary[newCategory].push(updatedItem);
-      syncPatientVocabularyToLocal(patientVocabulary);
+      if (error) throw error;
 
-      updateVocabularyCategoryCounts();
+      await updateVocabularyCategoryCounts();
       setActiveVocabularyCategoryButton(newCategory);
       setVocabularyPanelCategory(newCategory);
-      renderVocabularyCards(newCategory);
+      await renderVocabularyCards(newCategory);
 
       vocabularyToEdit = null;
       editVocabularyForm.reset();
       editVocabularyModal.classList.remove('active');
       alert('Vocabulary updated successfully.');
-    };
-
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        saveEditedVocabulary(reader.result);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      saveEditedVocabulary(existingItem.image);
+    } catch (error) {
+      showError(error);
     }
   });
 }
 
 if (confirmDeleteVocabularyModal && deleteVocabularyModal) {
-  confirmDeleteVocabularyModal.addEventListener('click', () => {
+  confirmDeleteVocabularyModal.addEventListener('click', async () => {
     if (!vocabularyToDelete) return;
 
-    const patientVocabulary = getPatientVocabularyFromLocal();
-    const existingItem = patientVocabulary[vocabularyToDelete.category][vocabularyToDelete.index];
+    try {
+      const { error } = await supabaseClient
+        .from('patient_vocabulary')
+        .delete()
+        .eq('id', vocabularyToDelete.id)
+        .eq('patient_id', vocabularyPatientId);
 
-    if (!existingItem) return;
+      if (error) throw error;
 
-    patientVocabulary[vocabularyToDelete.category].splice(vocabularyToDelete.index, 1);
-    syncPatientVocabularyToLocal(patientVocabulary);
+      await updateVocabularyCategoryCounts();
+      await renderVocabularyCards(currentVocabularyCategory);
 
-    updateVocabularyCategoryCounts();
-    renderVocabularyCards(currentVocabularyCategory);
-
-    vocabularyToDelete = null;
-    deleteVocabularyModal.classList.remove('active');
-    alert('Vocabulary deleted successfully.');
+      vocabularyToDelete = null;
+      deleteVocabularyModal.classList.remove('active');
+      alert('Vocabulary deleted successfully.');
+    } catch (error) {
+      showError(error);
+    }
   });
 }
 
@@ -559,7 +655,14 @@ if (cancelDeleteVocabularyModal && deleteVocabularyModal) {
   }
 });
 
-updateVocabularyCategoryCounts();
-setActiveVocabularyCategoryButton('people');
-setVocabularyPanelCategory('people');
-renderVocabularyCards('people');
+async function initializeManageVocabularyPage() {
+  await loadCurrentUserProfile();
+  await updateVocabularyCategoryCounts();
+  setActiveVocabularyCategoryButton('people');
+  setVocabularyPanelCategory('people');
+  await renderVocabularyCards('people');
+}
+
+initializeManageVocabularyPage().catch((error) => {
+  showError(error);
+});
