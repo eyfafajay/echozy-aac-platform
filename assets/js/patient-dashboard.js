@@ -62,6 +62,19 @@ const unsuccessfulVocabularyCount = document.getElementById('unsuccessfulVocabul
 
 const frequentlyUsedPhrasesTableBody = document.getElementById('frequentlyUsedPhrasesTableBody');
 
+const SUPABASE_URL = 'https://drvmfnlaxkcqbwoqjefu.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4ugmgc1ktCaLEmwB1ttnbA_XjOCtqDm';
+
+const supabaseClient =
+  window.supabase && SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true
+        }
+      })
+    : null;
+
 const sharedUserQuery = new URLSearchParams({
   role: userRole,
   userId,
@@ -90,8 +103,16 @@ if (backToPatientsBtn) {
 }
 
 if (logoutNavLink) {
-  logoutNavLink.addEventListener('click', () => {
-    localStorage.removeItem('echozySession');
+  logoutNavLink.addEventListener('click', async () => {
+    try {
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      localStorage.removeItem('echozySession');
+    }
   });
 }
 
@@ -101,30 +122,6 @@ function getStoredPatients() {
 
 function saveStoredPatients(patients) {
   localStorage.setItem('echozyPatients', JSON.stringify(patients));
-}
-
-function getStoredPhrases() {
-  return JSON.parse(localStorage.getItem('echozyPhrases') || '{}');
-}
-
-function getStoredVocabulary() {
-  return JSON.parse(localStorage.getItem('echozyVocabulary') || '{}');
-}
-
-function getStoredPracticeResults() {
-  return JSON.parse(localStorage.getItem('echozyPracticeResults') || '{}');
-}
-
-function getStoredUsageCounts() {
-  return JSON.parse(localStorage.getItem('echozyUsageCounts') || '{}');
-}
-
-function getStoredSessionLogs() {
-  return JSON.parse(localStorage.getItem('echozySessionLogs') || '{}');
-}
-
-function saveStoredSessionLogs(data) {
-  localStorage.setItem('echozySessionLogs', JSON.stringify(data));
 }
 
 function updatePatientStatusInStorage(patientId, nextStatus) {
@@ -140,19 +137,18 @@ function updatePatientStatusInStorage(patientId, nextStatus) {
   return patients[patientId];
 }
 
-function recordSessionEntry(patientId) {
-  const allSessionLogs = getStoredSessionLogs();
+async function recordSessionEntry(patientId) {
+  const { error } = await supabaseClient
+    .from('session_logs')
+    .insert({
+      patient_id: patientId,
+      entered_at: new Date().toISOString(),
+      quit_at: null
+    });
 
-  if (!allSessionLogs[patientId]) {
-    allSessionLogs[patientId] = [];
+  if (error) {
+    throw error;
   }
-
-  allSessionLogs[patientId].push({
-    enteredAt: new Date().toISOString(),
-    quitAt: ''
-  });
-
-  saveStoredSessionLogs(allSessionLogs);
 }
 
 function calculateAgeFromDob(dobValue) {
@@ -199,16 +195,14 @@ function updateProgressCircle(circleElement, percent) {
   )`;
 }
 
-function countTotalItemsByPatient(data, patientId) {
-  const patientData = data[patientId] || {};
-  return Object.values(patientData).reduce((total, items) => {
+function countTotalItems(data) {
+  return Object.values(data).reduce((total, items) => {
     return total + (Array.isArray(items) ? items.length : 0);
   }, 0);
 }
 
-function getAllIdsByPatient(data, patientId) {
-  const patientData = data[patientId] || {};
-  return Object.values(patientData)
+function getAllIds(data) {
+  return Object.values(data)
     .flat()
     .map((item) => item.id)
     .filter(Boolean);
@@ -235,10 +229,8 @@ function formatSessionDateTime(isoString) {
   });
 }
 
-function flattenPatientItemsWithCategory(data, patientId) {
-  const patientData = data[patientId] || {};
-
-  return Object.entries(patientData).flatMap(([categoryKey, items]) => {
+function flattenItemsWithCategory(data) {
+  return Object.entries(data).flatMap(([categoryKey, items]) => {
     if (!Array.isArray(items)) return [];
 
     return items.map((item) => ({
@@ -276,10 +268,15 @@ function getVocabularyCategoryLabel(categoryKey) {
   return vocabularyCategoryLabels[categoryKey] || categoryKey;
 }
 
-function removePatientFromLocalStorage(patientId) {
-  const patients = getStoredPatients();
-  delete patients[patientId];
-  saveStoredPatients(patients);
+async function removePatientFromSupabase(patientId) {
+  const { error } = await supabaseClient
+    .from('patients')
+    .delete()
+    .eq('id', patientId);
+
+  if (error) {
+    throw error;
+  }
 }
 
 function showPatientNotFound() {
@@ -349,87 +346,270 @@ function showPatientNotFound() {
   }
 }
 
-function renderPatientData(patient) {
-  currentPatient = patient;
+async function getPatientFromSupabase(patientId) {
+  const { data, error } = await supabaseClient
+    .from('patients')
+    .select('*')
+    .eq('id', patientId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data || null;
+}
+
+async function getMergedPatientPhrases(patientId) {
+  const { data: adminPhrases, error: adminError } = await supabaseClient
+    .from('admin_phrases')
+    .select('*')
+    .order('id', { ascending: true });
+
+  if (adminError) {
+    throw adminError;
+  }
+
+  const { data: patientPhrases, error: patientError } = await supabaseClient
+    .from('patient_phrases')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: true });
+
+  if (patientError) {
+    throw patientError;
+  }
+
+  const merged = {
+    urgent: [],
+    basic: [],
+    feelings: [],
+    physical: [],
+    daily: [],
+    social: [],
+    rehab: [],
+    activities: []
+  };
+
+  (adminPhrases || []).forEach((phrase) => {
+    if (!merged[phrase.category]) return;
+    merged[phrase.category].push({
+      id: phrase.id,
+      textEn: phrase.text_en,
+      textMs: phrase.text_ms
+    });
+  });
+
+  (patientPhrases || []).forEach((phrase) => {
+    if (!merged[phrase.category]) return;
+    merged[phrase.category].push({
+      id: phrase.id,
+      textEn: phrase.text_en,
+      textMs: phrase.text_ms
+    });
+  });
+
+  return merged;
+}
+
+async function getMergedPatientVocabulary(patientId) {
+  const { data: adminVocabulary, error: adminError } = await supabaseClient
+    .from('admin_vocabulary')
+    .select('*')
+    .order('id', { ascending: true });
+
+  if (adminError) {
+    throw adminError;
+  }
+
+  const { data: patientVocabulary, error: patientError } = await supabaseClient
+    .from('patient_vocabulary')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: true });
+
+  if (patientError) {
+    throw patientError;
+  }
+
+  const merged = {
+    people: [],
+    food: [],
+    places: [],
+    body: [],
+    feelings: [],
+    actions: []
+  };
+
+  (adminVocabulary || []).forEach((item) => {
+    if (!merged[item.category]) return;
+    merged[item.category].push({
+      id: item.id,
+      textEn: item.text_en,
+      textMs: item.text_ms
+    });
+  });
+
+  (patientVocabulary || []).forEach((item) => {
+    if (!merged[item.category]) return;
+    merged[item.category].push({
+      id: item.id,
+      textEn: item.text_en,
+      textMs: item.text_ms
+    });
+  });
+
+  return merged;
+}
+
+async function getPatientPracticeResults(patientId) {
+  const { data, error } = await supabaseClient
+    .from('practice_results')
+    .select('content_type, content_id, result_status')
+    .eq('patient_id', patientId);
+
+  if (error) {
+    throw error;
+  }
+
+  const results = {
+    phrases: {},
+    vocabulary: {}
+  };
+
+  (data || []).forEach((row) => {
+    if (row.content_type === 'phrases' || row.content_type === 'vocabulary') {
+      results[row.content_type][row.content_id] = row.result_status;
+    }
+  });
+
+  return results;
+}
+
+async function getPatientUsageCounts(patientId) {
+  const { data, error } = await supabaseClient
+    .from('usage_counts')
+    .select('content_type, content_id, click_count')
+    .eq('patient_id', patientId);
+
+  if (error) {
+    throw error;
+  }
+
+  const usage = {
+    phrases: {},
+    vocabulary: {}
+  };
+
+  (data || []).forEach((row) => {
+    if (row.content_type === 'phrases' || row.content_type === 'vocabulary') {
+      usage[row.content_type][row.content_id] = row.click_count || 0;
+    }
+  });
+
+  return usage;
+}
+
+async function getPatientSessionLogs(patientId) {
+  const { data, error } = await supabaseClient
+    .from('session_logs')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('entered_at', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+}
+
+async function renderPatientData(patient) {
+  currentPatient = {
+    id: patient.id,
+    name: patient.full_name,
+    gender: patient.gender,
+    age: patient.age,
+    dob: patient.dob,
+    status: patient.status || 'Inactive',
+    preferredLanguage: patient.preferred_language || 'English',
+    notes: patient.notes || ''
+  };
 
   if (patientNameHeading) {
-    patientNameHeading.textContent = patient.name;
+    patientNameHeading.textContent = currentPatient.name;
   }
 
   if (patientDashboardSubtext) {
     patientDashboardSubtext.textContent =
-      `View patient profile, monitor communication activity, and access communication analytics for ${patient.name}.`;
+      `View patient profile, monitor communication activity, and access communication analytics for ${currentPatient.name}.`;
   }
 
   if (patientProfileName) {
-    patientProfileName.textContent = patient.name;
+    patientProfileName.textContent = currentPatient.name;
   }
 
   if (patientProfileId) {
-    patientProfileId.textContent = `Patient ID: ${patient.id}`;
+    patientProfileId.textContent = `Patient ID: ${currentPatient.id}`;
   }
 
   if (patientProfileMeta) {
-    patientProfileMeta.textContent = `${patient.gender} • ${patient.age} years old`;
+    patientProfileMeta.textContent = `${currentPatient.gender} • ${currentPatient.age} years old`;
   }
 
   if (patientProfileStatus) {
-    patientProfileStatus.textContent = patient.status;
+    patientProfileStatus.textContent = currentPatient.status;
     patientProfileStatus.classList.remove('active-badge', 'inactive-badge');
     patientProfileStatus.classList.add(
-      patient.status === 'Active' ? 'active-badge' : 'inactive-badge'
+      currentPatient.status === 'Active' ? 'active-badge' : 'inactive-badge'
     );
   }
 
   if (patientProfileAvatar) {
-    patientProfileAvatar.src = getAvatarByGender(patient.gender);
-    patientProfileAvatar.alt = patient.name;
+    patientProfileAvatar.src = getAvatarByGender(currentPatient.gender);
+    patientProfileAvatar.alt = currentPatient.name;
   }
 
   if (editPatientFullname) {
-    editPatientFullname.value = patient.name;
+    editPatientFullname.value = currentPatient.name;
   }
 
   if (editPatientId) {
-    editPatientId.value = patient.id;
+    editPatientId.value = currentPatient.id;
   }
 
   if (editPatientAge) {
-    editPatientAge.value = patient.age;
+    editPatientAge.value = currentPatient.age;
   }
 
   if (editPatientDob) {
-    editPatientDob.value = patient.dob || '';
+    editPatientDob.value = currentPatient.dob || '';
   }
 
   if (editPatientGender) {
-    editPatientGender.value = patient.gender;
+    editPatientGender.value = currentPatient.gender;
   }
 
   if (editPatientLanguage) {
-    editPatientLanguage.value = patient.preferredLanguage || 'English';
+    editPatientLanguage.value = currentPatient.preferredLanguage || 'English';
   }
 
   if (editPatientNotes) {
-    editPatientNotes.value = patient.notes || '';
+    editPatientNotes.value = currentPatient.notes || '';
   }
 
-  const allPhrases = getStoredPhrases();
-  const allVocabulary = getStoredVocabulary();
-  const allPracticeResults = getStoredPracticeResults();
-  const allUsageCounts = getStoredUsageCounts();
-  const allSessionLogs = getStoredSessionLogs();
-
-  const patientPracticeResults = allPracticeResults[patient.id] || { phrases: {}, vocabulary: {} };
-  const patientUsageCounts = allUsageCounts[patient.id] || { phrases: {}, vocabulary: {} };
-  const patientSessionLogs = allSessionLogs[patient.id] || [];
+  const phraseData = await getMergedPatientPhrases(currentPatient.id);
+  const vocabularyData = await getMergedPatientVocabulary(currentPatient.id);
+  const patientPracticeResults = await getPatientPracticeResults(currentPatient.id);
+  const patientUsageCounts = await getPatientUsageCounts(currentPatient.id);
+  const patientSessionLogs = await getPatientSessionLogs(currentPatient.id);
 
   if (totalPhrasesCount) {
-    totalPhrasesCount.textContent = countTotalItemsByPatient(allPhrases, patient.id);
+    totalPhrasesCount.textContent = countTotalItems(phraseData);
   }
 
   if (totalVocabularyCount) {
-    totalVocabularyCount.textContent = countTotalItemsByPatient(allVocabulary, patient.id);
+    totalVocabularyCount.textContent = countTotalItems(vocabularyData);
   }
 
   if (totalSessionsCount) {
@@ -438,13 +618,13 @@ function renderPatientData(patient) {
 
   if (lastSessionText) {
     const latestSession = patientSessionLogs.length
-      ? (patientSessionLogs[patientSessionLogs.length - 1].quitAt || patientSessionLogs[patientSessionLogs.length - 1].enteredAt)
+      ? (patientSessionLogs[patientSessionLogs.length - 1].quit_at || patientSessionLogs[patientSessionLogs.length - 1].entered_at)
       : '';
     lastSessionText.textContent = formatSessionDateTime(latestSession);
   }
 
-  const phraseIds = getAllIdsByPatient(allPhrases, patient.id);
-  const vocabularyIds = getAllIdsByPatient(allVocabulary, patient.id);
+  const phraseIds = getAllIds(phraseData);
+  const vocabularyIds = getAllIds(vocabularyData);
 
   const successfulPhraseTotal = countResultItems(
     patientPracticeResults.phrases,
@@ -504,8 +684,8 @@ function renderPatientData(patient) {
     unsuccessfulVocabularyCount.textContent = unsuccessfulVocabularyTotal;
   }
 
-  const flattenedPhraseItems = flattenPatientItemsWithCategory(allPhrases, patient.id);
-  const flattenedVocabularyItems = flattenPatientItemsWithCategory(allVocabulary, patient.id);
+  const flattenedPhraseItems = flattenItemsWithCategory(phraseData);
+  const flattenedVocabularyItems = flattenItemsWithCategory(vocabularyData);
 
   const usedPhraseItems = flattenedPhraseItems
     .map((item) => ({
@@ -543,7 +723,7 @@ function renderPatientData(patient) {
       frequentlyUsedPhrasesTableBody.innerHTML = combinedFrequentlyUsedItems.map((item) => `
         <tr>
           <td>${item.usageType}</td>
-          <td>${getDisplayTextByLanguage(item, patient.preferredLanguage || 'English')}</td>
+          <td>${getDisplayTextByLanguage(item, currentPatient.preferredLanguage || 'English')}</td>
           <td>${item.categoryLabel}</td>
           <td>${item.frequency}</td>
         </tr>
@@ -552,10 +732,10 @@ function renderPatientData(patient) {
   }
 
   const sharedPatientUserQuery = new URLSearchParams({
-    patient: patient.id,
-    name: patient.name,
-    status: patient.status,
-    language: patient.preferredLanguage || 'English',
+    patient: currentPatient.id,
+    name: currentPatient.name,
+    status: currentPatient.status,
+    language: currentPatient.preferredLanguage || 'English',
     role: userRole,
     userId,
     user: userName
@@ -571,35 +751,56 @@ function renderPatientData(patient) {
 
   if (enterSessionBtn) {
     enterSessionBtn.href =
-      `../patients/board.html?patient=${encodeURIComponent(patient.id)}` +
-      `&name=${encodeURIComponent(patient.name)}` +
+      `../patients/board.html?patient=${encodeURIComponent(currentPatient.id)}` +
+      `&name=${encodeURIComponent(currentPatient.name)}` +
       `&status=${encodeURIComponent('Active')}` +
-      `&language=${encodeURIComponent(patient.preferredLanguage || 'English')}` +
+      `&language=${encodeURIComponent(currentPatient.preferredLanguage || 'English')}` +
       `&role=${encodeURIComponent(userRole)}` +
       `&userId=${encodeURIComponent(userId)}` +
       `&user=${encodeURIComponent(userName)}`;
 
-    enterSessionBtn.onclick = () => {
-      const updatedPatient = updatePatientStatusInStorage(patient.id, 'Active');
+    enterSessionBtn.onclick = async () => {
+      try {
+        const { error } = await supabaseClient
+          .from('patients')
+          .update({
+            status: 'Active'
+          })
+          .eq('id', currentPatient.id);
 
-      if (updatedPatient) {
-        currentPatient = updatedPatient;
-        recordSessionEntry(patient.id);
+        if (error) {
+          throw error;
+        }
+
+        const updatedPatient = updatePatientStatusInStorage(currentPatient.id, 'Active');
+        if (updatedPatient) {
+          currentPatient.status = 'Active';
+        }
+
+        await recordSessionEntry(currentPatient.id);
+      } catch (error) {
+        console.error(error);
+        alert(error.message || 'Unable to start session.');
+        return false;
       }
     };
   }
 }
 
-function loadPatientData() {
-  const patients = getStoredPatients();
-  const storedPatient = patients[urlPatientId];
+async function loadPatientData() {
+  try {
+    const patient = await getPatientFromSupabase(urlPatientId);
 
-  if (storedPatient) {
-    renderPatientData(storedPatient);
-    return;
+    if (patient) {
+      await renderPatientData(patient);
+      return;
+    }
+
+    showPatientNotFound();
+  } catch (error) {
+    console.error(error);
+    showPatientNotFound();
   }
-
-  showPatientNotFound();
 }
 
 loadPatientData();
@@ -629,36 +830,58 @@ if (cancelEditPatientModal && editPatientModal) {
 }
 
 if (editPatientForm) {
-  editPatientForm.addEventListener('submit', (event) => {
+  editPatientForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
-    if (!userId) {
+    if (!userId || !currentPatient) {
       alert('No active user session found. Please sign in again.');
       return;
     }
 
-    const patients = getStoredPatients();
-
     const updatedPatient = {
       id: editPatientId.value.trim(),
-      name: editPatientFullname.value.trim(),
+      full_name: editPatientFullname.value.trim(),
       gender: editPatientGender.value,
-      age: editPatientAge.value.trim(),
+      age: Number(editPatientAge.value.trim()),
       dob: editPatientDob.value,
-      status: currentPatient ? currentPatient.status : 'Inactive',
-      preferredLanguage: editPatientLanguage ? editPatientLanguage.value : 'English',
-      notes: editPatientNotes ? editPatientNotes.value.trim() : '',
-      avatar: getAvatarByGender(editPatientGender.value),
-      ownerId: userId,
-      roleOwner: userRole
+      status: currentPatient.status || 'Inactive',
+      preferred_language: editPatientLanguage ? editPatientLanguage.value : 'English',
+      notes: editPatientNotes ? editPatientNotes.value.trim() : ''
     };
 
-    patients[updatedPatient.id] = updatedPatient;
-    saveStoredPatients(patients);
-    renderPatientData(updatedPatient);
+    try {
+      const { error } = await supabaseClient
+        .from('patients')
+        .update(updatedPatient)
+        .eq('id', updatedPatient.id);
 
-    editPatientModal.classList.remove('active');
-    alert('Patient details updated successfully.');
+      if (error) {
+        throw error;
+      }
+
+      const localPatients = getStoredPatients();
+      if (localPatients[updatedPatient.id]) {
+        localPatients[updatedPatient.id] = {
+          ...localPatients[updatedPatient.id],
+          name: updatedPatient.full_name,
+          gender: updatedPatient.gender,
+          age: updatedPatient.age,
+          dob: updatedPatient.dob,
+          status: updatedPatient.status,
+          preferredLanguage: updatedPatient.preferred_language,
+          notes: updatedPatient.notes,
+          avatar: getAvatarByGender(updatedPatient.gender)
+        };
+        saveStoredPatients(localPatients);
+      }
+
+      await loadPatientData();
+      editPatientModal.classList.remove('active');
+      alert('Patient details updated successfully.');
+    } catch (error) {
+      console.error(error);
+      alert(error.message || 'Unable to update patient details.');
+    }
   });
 }
 
@@ -683,17 +906,28 @@ if (cancelDeletePatientModal && deletePatientModal) {
 }
 
 if (confirmDeletePatientModal && deletePatientModal) {
-  confirmDeletePatientModal.addEventListener('click', () => {
+  confirmDeletePatientModal.addEventListener('click', async () => {
     if (!currentPatient || !userId) {
       alert('Unable to find patient record.');
       return;
     }
 
-    removePatientFromLocalStorage(currentPatient.id);
+    try {
+      await removePatientFromSupabase(currentPatient.id);
 
-    deletePatientModal.classList.remove('active');
-    alert('Patient record deleted successfully.');
-    window.location.href = `manage-patients.html?${sharedUserQuery}`;
+      const localPatients = getStoredPatients();
+      if (localPatients[currentPatient.id]) {
+        delete localPatients[currentPatient.id];
+        saveStoredPatients(localPatients);
+      }
+
+      deletePatientModal.classList.remove('active');
+      alert('Patient record deleted successfully.');
+      window.location.href = `manage-patients.html?${sharedUserQuery}`;
+    } catch (error) {
+      console.error(error);
+      alert(error.message || 'Unable to delete patient record.');
+    }
   });
 }
 
