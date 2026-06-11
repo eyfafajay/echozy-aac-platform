@@ -146,16 +146,6 @@ async function loadCurrentAuthUser() {
   if (!user) {
     throw new Error('No active user session found. Please sign in again.');
   }
-  currentAuthUser = user;
-}
-
-async function ensureCurrentAuthUser() {
-  if (currentAuthUser) {
-    return currentAuthUser;
-  }
-
-  await loadCurrentAuthUser();
-  return currentAuthUser;
 }
 
 function getStoredPatients() {
