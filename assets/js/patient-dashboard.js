@@ -148,6 +148,11 @@ async function loadCurrentAuthUser() {
   }
 
   currentAuthUser = user;
+  if (userId && userId !== user.id) {
+    localStorage.removeItem('echozySession');
+    await supabaseClient.auth.signOut();
+    throw new Error('Session mismatch detected. Please sign in again.');
+  }
 }
 
 function getStoredPatients() {
