@@ -191,6 +191,7 @@ async function recordSessionEntry(patientId) {
     .from('session_logs')
     .insert({
       patient_id: patientId,
+      user_id: currentAuthUser?.id || userId,
       entered_at: new Date().toISOString(),
       quit_at: null
     });

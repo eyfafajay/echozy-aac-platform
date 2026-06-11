@@ -745,6 +745,7 @@ async function recordQuitSessionInSupabase() {
     .from('session_logs')
     .select('id')
     .eq('patient_id', patientId)
+    .eq('user_id', userId)
     .is('quit_at', null)
     .order('entered_at', { ascending: false })
     .limit(1)

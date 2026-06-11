@@ -246,6 +246,7 @@ async function getSessionEntriesForCurrentUser() {
   const { data, error } = await supabaseClient
     .from('session_logs')
     .select('*')
+    .eq('user_id', currentAuthUser.id)
     .in('patient_id', patientIds)
     .order('entered_at', { ascending: false });
 
