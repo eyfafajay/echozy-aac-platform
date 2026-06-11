@@ -75,13 +75,26 @@ const supabaseClient =
       })
     : null;
 
+let currentPatient = null;
+let currentAuthUser = null;
+
+function getResolvedUserId() {
+  return currentAuthUser?.id || userId || '';
+}
+
+function getSharedUserQuery() {
+  return new URLSearchParams({
+    role: userRole,
+    userId: getResolvedUserId(),
+    name: userName
+  }).toString();
+}
+
 const sharedUserQuery = new URLSearchParams({
   role: userRole,
   userId,
   name: userName
 }).toString();
-
-let currentPatient = null;
 
 if (dashboardNavLink) {
   dashboardNavLink.href = `dashboard.html?${sharedUserQuery}`;
@@ -114,6 +127,27 @@ if (logoutNavLink) {
       localStorage.removeItem('echozySession');
     }
   });
+}
+
+async function loadCurrentAuthUser() {
+  if (!supabaseClient) {
+    throw new Error('Supabase client is not available. Please load the Supabase CDN before this script.');
+  }
+
+  const {
+    data: { user },
+    error
+  } = await supabaseClient.auth.getUser();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!user) {
+    throw new Error('No active user session found. Please sign in again.');
+  }
+
+  currentAuthUser = user;
 }
 
 function getStoredPatients() {
@@ -268,11 +302,12 @@ function getVocabularyCategoryLabel(categoryKey) {
   return vocabularyCategoryLabels[categoryKey] || categoryKey;
 }
 
-async function removePatientFromSupabase(patientId) {
+async function removePatientFromCurrentUser(patientId) {
   const { error } = await supabaseClient
-    .from('patients')
+    .from('user_patients')
     .delete()
-    .eq('id', patientId);
+    .eq('user_id', currentAuthUser.id)
+    .eq('patient_id', patientId);
 
   if (error) {
     throw error;
@@ -286,7 +321,7 @@ function showPatientNotFound() {
 
   if (patientDashboardSubtext) {
     patientDashboardSubtext.textContent =
-      'The selected patient record could not be found.';
+      'The selected patient record could not be found, or it is not linked to your account.';
   }
 
   if (patientProfileName) {
@@ -737,7 +772,7 @@ async function renderPatientData(patient) {
     status: currentPatient.status,
     language: currentPatient.preferredLanguage || 'English',
     role: userRole,
-    userId,
+    userId: getResolvedUserId(),
     user: userName
   }).toString();
 
@@ -756,7 +791,7 @@ async function renderPatientData(patient) {
       `&status=${encodeURIComponent('Active')}` +
       `&language=${encodeURIComponent(currentPatient.preferredLanguage || 'English')}` +
       `&role=${encodeURIComponent(userRole)}` +
-      `&userId=${encodeURIComponent(userId)}` +
+      `&userId=${encodeURIComponent(getResolvedUserId())}` +
       `&user=${encodeURIComponent(userName)}`;
 
     enterSessionBtn.href = sessionBoardUrl;
@@ -808,7 +843,39 @@ async function loadPatientData() {
   }
 }
 
-loadPatientData();
+async function initializePatientDashboard() {
+  try {
+    await loadCurrentAuthUser();
+
+    const refreshedSharedUserQuery = getSharedUserQuery();
+
+    if (dashboardNavLink) {
+      dashboardNavLink.href = `dashboard.html?${refreshedSharedUserQuery}`;
+    }
+
+    if (managePatientsNavLink) {
+      managePatientsNavLink.href = `manage-patients.html?${refreshedSharedUserQuery}`;
+    }
+
+    if (settingsNavLink) {
+      settingsNavLink.href =
+        userRole === 'provider'
+          ? `settings-provider.html?${refreshedSharedUserQuery}`
+          : `settings-caregiver.html?${refreshedSharedUserQuery}`;
+    }
+
+    if (backToPatientsBtn) {
+      backToPatientsBtn.href = `manage-patients.html?${refreshedSharedUserQuery}`;
+    }
+
+    await loadPatientData();
+  } catch (error) {
+    console.error(error);
+    showPatientNotFound();
+  }
+}
+
+initializePatientDashboard();
 
 if (editPatientDob && editPatientAge) {
   editPatientDob.addEventListener('change', () => {
@@ -838,7 +905,7 @@ if (editPatientForm) {
   editPatientForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
-    if (!userId || !currentPatient) {
+    if (!currentAuthUser || !currentPatient) {
       alert('No active user session found. Please sign in again.');
       return;
     }
@@ -912,13 +979,13 @@ if (cancelDeletePatientModal && deletePatientModal) {
 
 if (confirmDeletePatientModal && deletePatientModal) {
   confirmDeletePatientModal.addEventListener('click', async () => {
-    if (!currentPatient || !userId) {
+    if (!currentPatient || !currentAuthUser) {
       alert('Unable to find patient record.');
       return;
     }
 
     try {
-      await removePatientFromSupabase(currentPatient.id);
+      await removePatientFromCurrentUser(currentPatient.id);
 
       const localPatients = getStoredPatients();
       if (localPatients[currentPatient.id]) {
@@ -927,11 +994,11 @@ if (confirmDeletePatientModal && deletePatientModal) {
       }
 
       deletePatientModal.classList.remove('active');
-      alert('Patient record deleted successfully.');
-      window.location.href = `manage-patients.html?${sharedUserQuery}`;
+      alert('Patient removed from your account successfully.');
+      window.location.href = `manage-patients.html?${getSharedUserQuery()}`;
     } catch (error) {
       console.error(error);
-      alert(error.message || 'Unable to delete patient record.');
+      alert(error.message || 'Unable to remove patient from your account.');
     }
   });
 }
