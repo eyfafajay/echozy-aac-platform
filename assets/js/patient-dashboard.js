@@ -146,6 +146,23 @@ async function loadCurrentAuthUser() {
   if (!user) {
     throw new Error('No active user session found. Please sign in again.');
   }
+
+  currentAuthUser = user;
+
+  if (userId && userId !== user.id) {
+    localStorage.removeItem('echozySession');
+    await supabaseClient.auth.signOut();
+    throw new Error('Session mismatch detected. Please sign in again.');
+  }
+}
+
+async function ensureCurrentAuthUser() {
+  if (currentAuthUser) {
+    return currentAuthUser;
+  }
+
+  await loadCurrentAuthUser();
+  return currentAuthUser;
 }
 
 function getStoredPatients() {
