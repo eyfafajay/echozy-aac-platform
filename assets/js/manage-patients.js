@@ -38,6 +38,8 @@ const supabaseClient =
       })
     : null;
 
+let currentAuthUser = null;
+
 const sharedUserQuery = new URLSearchParams({
   role: currentRole,
   userId: currentUserId,
@@ -98,6 +100,34 @@ function getAvatarByGender(gender) {
     : '../../assets/images/avatars/male.png';
 }
 
+function isMissingPatientForeignKeyError(error) {
+  return (
+    error?.code === '23503' ||
+    String(error?.message || '').toLowerCase().includes('foreign key')
+  );
+}
+
+async function loadCurrentAuthUser() {
+  if (!supabaseClient) {
+    throw new Error('Supabase client is not available. Please load the Supabase CDN before this script.');
+  }
+
+  const {
+    data: { user },
+    error
+  } = await supabaseClient.auth.getUser();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!user) {
+    throw new Error('No active user session found. Please sign in again.');
+  }
+
+  currentAuthUser = user;
+}
+
 async function getAllPatients() {
   const { data, error } = await supabaseClient
     .from('patients')
@@ -109,6 +139,54 @@ async function getAllPatients() {
   }
 
   return data || [];
+}
+
+async function getPatientById(patientId) {
+  const { data, error } = await supabaseClient
+    .from('patients')
+    .select('*')
+    .eq('id', patientId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data || null;
+}
+
+async function linkPatientToCurrentUser(patientId) {
+  const { error } = await supabaseClient
+    .from('user_patients')
+    .upsert(
+      {
+        user_id: currentAuthUser.id,
+        patient_id: patientId,
+        assigned_role: currentRole
+      },
+      {
+        onConflict: 'user_id,patient_id',
+        ignoreDuplicates: true
+      }
+    );
+
+  if (error) {
+    throw error;
+  }
+}
+
+function goToPatientDashboard(patient) {
+  const patientQuery = new URLSearchParams({
+    patient: patient.id,
+    name: patient.full_name,
+    status: patient.status || 'Inactive',
+    language: patient.preferred_language || 'English',
+    role: currentRole,
+    userId: currentUserId || currentAuthUser?.id || '',
+    user: currentName
+  }).toString();
+
+  window.location.href = `patient-dashboard.html?${patientQuery}`;
 }
 
 async function renderPatientsFromSupabase() {
@@ -130,7 +208,7 @@ async function renderPatientsFromSupabase() {
       status: patient.status || 'Inactive',
       language: patient.preferred_language || 'English',
       role: currentRole,
-      userId: currentUserId,
+      userId: currentUserId || currentAuthUser?.id || '',
       user: currentName
     }).toString();
 
@@ -196,13 +274,13 @@ if (addPatientForm) {
     const dob = patientDobInput.value;
     const notes = patientNotesInput ? patientNotesInput.value.trim() : '';
 
-    if (!currentUserId) {
+    if (!currentAuthUser) {
       alert('No active user session found. Please sign in again.');
       return;
     }
 
-    if (!fullName || !id || !age || !gender || !dob) {
-      alert('Please complete all patient details before saving.');
+    if (!id) {
+      alert('Please enter the Patient ID.');
       return;
     }
 
@@ -212,18 +290,33 @@ if (addPatientForm) {
     }
 
     try {
-      const { data: existingPatient, error: existingError } = await supabaseClient
-        .from('patients')
-        .select('id')
-        .eq('id', id)
-        .maybeSingle();
+      try {
+        await linkPatientToCurrentUser(id);
 
-      if (existingError) {
-        throw existingError;
+        const linkedPatient = await getPatientById(id);
+
+        if (linkedPatient) {
+          await renderPatientsFromSupabase();
+
+          addPatientModal.classList.remove('active');
+          addPatientForm.reset();
+
+          if (patientAgeInput) {
+            patientAgeInput.value = '';
+          }
+
+          alert('Existing patient linked successfully.');
+          goToPatientDashboard(linkedPatient);
+          return;
+        }
+      } catch (linkError) {
+        if (!isMissingPatientForeignKeyError(linkError)) {
+          throw linkError;
+        }
       }
 
-      if (existingPatient) {
-        alert('A patient with this ID already exists.');
+      if (!fullName || !age || !gender || !dob) {
+        alert('Patient ID not found. Please complete all patient details to add a new patient.');
         return;
       }
 
@@ -231,7 +324,7 @@ if (addPatientForm) {
         .from('patients')
         .insert({
           id,
-          created_by: currentUserId,
+          created_by: currentAuthUser.id,
           full_name: fullName,
           dob,
           age: Number(age),
@@ -245,6 +338,19 @@ if (addPatientForm) {
         throw insertError;
       }
 
+      await linkPatientToCurrentUser(id);
+
+      const newPatient = {
+        id,
+        full_name: fullName,
+        dob,
+        age: Number(age),
+        gender,
+        preferred_language: 'English',
+        notes: notes || null,
+        status: 'Inactive'
+      };
+
       await renderPatientsFromSupabase();
 
       addPatientModal.classList.remove('active');
@@ -255,18 +361,7 @@ if (addPatientForm) {
       }
 
       alert('Patient added successfully.');
-
-      const newPatientQuery = new URLSearchParams({
-        patient: id,
-        name: fullName,
-        status: 'Inactive',
-        language: 'English',
-        role: currentRole,
-        userId: currentUserId,
-        user: currentName
-      }).toString();
-
-      window.location.href = `patient-dashboard.html?${newPatientQuery}`;
+      goToPatientDashboard(newPatient);
     } catch (error) {
       console.error(error);
       alert(error.message || 'Something went wrong while saving the patient.');
@@ -282,11 +377,18 @@ if (addPatientModal) {
   });
 }
 
-renderPatientsFromSupabase().catch((error) => {
-  console.error(error);
-  if (patientsGrid) {
-    patientsGrid.innerHTML = `
-      <div class="board-empty-state">Unable to load patients right now.</div>
-    `;
+async function initializeManagePatientsPage() {
+  try {
+    await loadCurrentAuthUser();
+    await renderPatientsFromSupabase();
+  } catch (error) {
+    console.error(error);
+    if (patientsGrid) {
+      patientsGrid.innerHTML = `
+        <div class="board-empty-state">Unable to load patients right now.</div>
+      `;
+    }
   }
-});
+}
+
+initializeManagePatientsPage();
