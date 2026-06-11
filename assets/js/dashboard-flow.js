@@ -2,7 +2,7 @@ const params = new URLSearchParams(window.location.search);
 const storedSession = JSON.parse(localStorage.getItem('echozySession') || '{}');
 
 const role = params.get('role') || storedSession.role || 'caregiver';
-const userId = params.get('userId') || storedSession.userId || 'U0001';
+const userId = params.get('userId') || storedSession.userId || '';
 const name = params.get('name') || storedSession.fullName || 'User';
 const email = params.get('email') || storedSession.email || '';
 
@@ -31,6 +31,20 @@ const supabaseClient =
         }
       })
     : null;
+
+let currentAuthUser = null;
+
+function getResolvedUserId() {
+  return currentAuthUser?.id || userId || '';
+}
+
+function getSharedQuery() {
+  return new URLSearchParams({
+    role,
+    userId: getResolvedUserId(),
+    name
+  }).toString();
+}
 
 const sharedQuery = new URLSearchParams({
   role,
@@ -88,6 +102,52 @@ if (logoutNavLink) {
   });
 }
 
+async function loadCurrentAuthUser() {
+  if (!supabaseClient) {
+    throw new Error('Supabase client is not available. Please load the Supabase CDN before this script.');
+  }
+
+  const {
+    data: { user },
+    error
+  } = await supabaseClient.auth.getUser();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!user) {
+    throw new Error('No active user session found. Please sign in again.');
+  }
+
+  currentAuthUser = user;
+
+  if (userId && userId !== user.id) {
+    localStorage.removeItem('echozySession');
+    await supabaseClient.auth.signOut();
+    throw new Error('Session mismatch detected. Please sign in again.');
+  }
+}
+
+function refreshNavigationLinks() {
+  const refreshedSharedQuery = getSharedQuery();
+
+  if (dashboardNavLink) {
+    dashboardNavLink.href = `dashboard.html?${refreshedSharedQuery}`;
+  }
+
+  if (managePatientsNavLink) {
+    managePatientsNavLink.href = `manage-patients.html?${refreshedSharedQuery}`;
+  }
+
+  if (settingsNavLink) {
+    settingsNavLink.href =
+      role === 'provider'
+        ? `settings-provider.html?${refreshedSharedQuery}`
+        : `settings-caregiver.html?${refreshedSharedQuery}`;
+  }
+}
+
 function formatDate(isoString) {
   if (!isoString) return '—';
 
@@ -138,20 +198,37 @@ function formatDurationFromRecord(record) {
 }
 
 async function getPatientsForCurrentUser() {
+  if (!currentAuthUser) {
+    return [];
+  }
+
   const { data, error } = await supabaseClient
-    .from('patients')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .from('user_patients')
+    .select(`
+      assigned_at,
+      patients (
+        *
+      )
+    `)
+    .eq('user_id', currentAuthUser.id)
+    .order('assigned_at', { ascending: false });
 
   if (error) {
     throw error;
   }
 
-  return data || [];
+  return (data || [])
+    .map((row) => row.patients)
+    .filter(Boolean);
 }
 
 async function getSessionEntriesForCurrentUser() {
   const patients = await getPatientsForCurrentUser();
+
+  if (!patients.length) {
+    return [];
+  }
+
   const patientMap = new Map(
     patients.map((patient) => [
       patient.id,
@@ -164,9 +241,12 @@ async function getSessionEntriesForCurrentUser() {
     ])
   );
 
+  const patientIds = patients.map((patient) => patient.id);
+
   const { data, error } = await supabaseClient
     .from('session_logs')
     .select('*')
+    .in('patient_id', patientIds)
     .order('entered_at', { ascending: false });
 
   if (error) {
@@ -174,6 +254,7 @@ async function getSessionEntriesForCurrentUser() {
   }
 
   return (data || [])
+    .filter((log) => patientMap.has(log.patient_id))
     .map((log) => {
       const patientInfo = patientMap.get(log.patient_id);
 
@@ -229,7 +310,7 @@ async function renderActivityLog() {
       status: entry.patientStatus || 'Active',
       language: entry.patientLanguage || 'English',
       role,
-      userId,
+      userId: getResolvedUserId(),
       user: name
     }).toString();
 
@@ -256,6 +337,8 @@ async function renderActivityLog() {
 
 async function initializeDashboard() {
   try {
+    await loadCurrentAuthUser();
+    refreshNavigationLinks();
     await renderDashboardSummary();
     await renderActivityLog();
   } catch (error) {
