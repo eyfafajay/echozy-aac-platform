@@ -304,10 +304,9 @@ function getVocabularyCategoryLabel(categoryKey) {
 
 async function removePatientFromCurrentUser(patientId) {
   const { error } = await supabaseClient
-    .from('user_patients')
-    .delete()
-    .eq('user_id', currentAuthUser.id)
-    .eq('patient_id', patientId);
+    .rpc('unlink_patient_from_current_user', {
+      target_patient_id: patientId
+    });
 
   if (error) {
     throw error;
