@@ -137,16 +137,28 @@ async function loadCurrentAuthUser() {
 }
 
 async function getAllPatients() {
+  if (!currentAuthUser) {
+    return [];
+  }
+
   const { data, error } = await supabaseClient
-    .from('patients')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .from('user_patients')
+    .select(`
+      assigned_at,
+      patients (
+        *
+      )
+    `)
+    .eq('user_id', currentAuthUser.id)
+    .order('assigned_at', { ascending: false });
 
   if (error) {
     throw error;
   }
 
-  return data || [];
+  return (data || [])
+    .map((row) => row.patients)
+    .filter(Boolean);
 }
 
 async function getPatientById(patientId) {
