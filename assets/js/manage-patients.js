@@ -107,6 +107,14 @@ function isMissingPatientForeignKeyError(error) {
   );
 }
 
+function isDuplicatePatientError(error) {
+  return (
+    error?.code === '23505' ||
+    String(error?.message || '').toLowerCase().includes('duplicate key') ||
+    String(error?.message || '').toLowerCase().includes('patients_pkey')
+  );
+}
+
 async function loadCurrentAuthUser() {
   if (!supabaseClient) {
     throw new Error('Supabase client is not available. Please load the Supabase CDN before this script.');
@@ -289,11 +297,17 @@ if (addPatientForm) {
       return;
     }
 
-    try {
       try {
-        await linkPatientToCurrentUser(id);
+        let linkedPatient = null;
 
-        const linkedPatient = await getPatientById(id);
+        try {
+          await linkPatientToCurrentUser(id);
+          linkedPatient = await getPatientById(id);
+        } catch (linkError) {
+          if (!isMissingPatientForeignKeyError(linkError)) {
+            throw linkError;
+          }
+        }
 
         if (linkedPatient) {
           await renderPatientsFromSupabase();
@@ -309,20 +323,13 @@ if (addPatientForm) {
           goToPatientDashboard(linkedPatient);
           return;
         }
-      } catch (linkError) {
-        if (!isMissingPatientForeignKeyError(linkError)) {
-          throw linkError;
+
+        if (!fullName || !age || !gender || !dob) {
+          alert('Patient ID not found. Please complete all patient details to add a new patient.');
+          return;
         }
-      }
 
-      if (!fullName || !age || !gender || !dob) {
-        alert('Patient ID not found. Please complete all patient details to add a new patient.');
-        return;
-      }
-
-      const { error: insertError } = await supabaseClient
-        .from('patients')
-        .insert({
+        const newPatient = {
           id,
           created_by: currentAuthUser.id,
           full_name: fullName,
@@ -332,40 +339,57 @@ if (addPatientForm) {
           preferred_language: 'English',
           notes: notes || null,
           status: 'Inactive'
-        });
+        };
 
-      if (insertError) {
-        throw insertError;
+        const { error: insertError } = await supabaseClient
+          .from('patients')
+          .insert(newPatient);
+
+        if (insertError) {
+          if (isDuplicatePatientError(insertError)) {
+            await linkPatientToCurrentUser(id);
+
+            const existingLinkedPatient = await getPatientById(id);
+
+            if (existingLinkedPatient) {
+              await renderPatientsFromSupabase();
+
+              addPatientModal.classList.remove('active');
+              addPatientForm.reset();
+
+              if (patientAgeInput) {
+                patientAgeInput.value = '';
+              }
+
+              alert('Existing patient linked successfully.');
+              goToPatientDashboard(existingLinkedPatient);
+              return;
+            }
+
+            alert('Existing patient was linked, but the record could not be loaded. Please refresh the page.');
+            return;
+          }
+
+          throw insertError;
+        }
+
+        await linkPatientToCurrentUser(id);
+
+        await renderPatientsFromSupabase();
+
+        addPatientModal.classList.remove('active');
+        addPatientForm.reset();
+
+        if (patientAgeInput) {
+          patientAgeInput.value = '';
+        }
+
+        alert('Patient added successfully.');
+        goToPatientDashboard(newPatient);
+      } catch (error) {
+        console.error(error);
+        alert(error.message || 'Something went wrong while saving the patient.');
       }
-
-      await linkPatientToCurrentUser(id);
-
-      const newPatient = {
-        id,
-        full_name: fullName,
-        dob,
-        age: Number(age),
-        gender,
-        preferred_language: 'English',
-        notes: notes || null,
-        status: 'Inactive'
-      };
-
-      await renderPatientsFromSupabase();
-
-      addPatientModal.classList.remove('active');
-      addPatientForm.reset();
-
-      if (patientAgeInput) {
-        patientAgeInput.value = '';
-      }
-
-      alert('Patient added successfully.');
-      goToPatientDashboard(newPatient);
-    } catch (error) {
-      console.error(error);
-      alert(error.message || 'Something went wrong while saving the patient.');
-    }
   });
 }
 
