@@ -183,6 +183,20 @@ async function linkPatientToCurrentUser(patientId) {
   }
 }
 
+async function linkExistingPatientToCurrentUser(patientId) {
+  const { data, error } = await supabaseClient
+    .rpc('link_existing_patient_to_current_user', {
+      target_patient_id: patientId,
+      target_role: currentRole
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return Array.isArray(data) ? data[0] || null : data || null;
+}
+
 function goToPatientDashboard(patient) {
   const patientQuery = new URLSearchParams({
     patient: patient.id,
@@ -297,84 +311,10 @@ if (addPatientForm) {
       return;
     }
 
-      try {
-        let linkedPatient = null;
+    try {
+      const existingLinkedPatient = await linkExistingPatientToCurrentUser(id);
 
-        try {
-          await linkPatientToCurrentUser(id);
-          linkedPatient = await getPatientById(id);
-        } catch (linkError) {
-          if (!isMissingPatientForeignKeyError(linkError)) {
-            throw linkError;
-          }
-        }
-
-        if (linkedPatient) {
-          await renderPatientsFromSupabase();
-
-          addPatientModal.classList.remove('active');
-          addPatientForm.reset();
-
-          if (patientAgeInput) {
-            patientAgeInput.value = '';
-          }
-
-          alert('Existing patient linked successfully.');
-          goToPatientDashboard(linkedPatient);
-          return;
-        }
-
-        if (!fullName || !age || !gender || !dob) {
-          alert('Patient ID not found. Please complete all patient details to add a new patient.');
-          return;
-        }
-
-        const newPatient = {
-          id,
-          created_by: currentAuthUser.id,
-          full_name: fullName,
-          dob,
-          age: Number(age),
-          gender,
-          preferred_language: 'English',
-          notes: notes || null,
-          status: 'Inactive'
-        };
-
-        const { error: insertError } = await supabaseClient
-          .from('patients')
-          .insert(newPatient);
-
-        if (insertError) {
-          if (isDuplicatePatientError(insertError)) {
-            await linkPatientToCurrentUser(id);
-
-            const existingLinkedPatient = await getPatientById(id);
-
-            if (existingLinkedPatient) {
-              await renderPatientsFromSupabase();
-
-              addPatientModal.classList.remove('active');
-              addPatientForm.reset();
-
-              if (patientAgeInput) {
-                patientAgeInput.value = '';
-              }
-
-              alert('Existing patient linked successfully.');
-              goToPatientDashboard(existingLinkedPatient);
-              return;
-            }
-
-            alert('Existing patient was linked, but the record could not be loaded. Please refresh the page.');
-            return;
-          }
-
-          throw insertError;
-        }
-
-        await linkPatientToCurrentUser(id);
-
+      if (existingLinkedPatient) {
         await renderPatientsFromSupabase();
 
         addPatientModal.classList.remove('active');
@@ -384,12 +324,72 @@ if (addPatientForm) {
           patientAgeInput.value = '';
         }
 
-        alert('Patient added successfully.');
-        goToPatientDashboard(newPatient);
-      } catch (error) {
-        console.error(error);
-        alert(error.message || 'Something went wrong while saving the patient.');
+        alert('Existing patient linked successfully.');
+        goToPatientDashboard(existingLinkedPatient);
+        return;
       }
+
+      if (!fullName || !age || !gender || !dob) {
+        alert('Patient ID not found. Please complete all patient details to add a new patient.');
+        return;
+      }
+
+      const newPatient = {
+        id,
+        created_by: currentAuthUser.id,
+        full_name: fullName,
+        dob,
+        age: Number(age),
+        gender,
+        preferred_language: 'English',
+        notes: notes || null,
+        status: 'Inactive'
+      };
+
+      const { error: insertError } = await supabaseClient
+        .from('patients')
+        .insert(newPatient);
+
+      if (insertError) {
+        if (isDuplicatePatientError(insertError)) {
+          const linkedPatientAfterDuplicate = await linkExistingPatientToCurrentUser(id);
+
+          if (linkedPatientAfterDuplicate) {
+            await renderPatientsFromSupabase();
+
+            addPatientModal.classList.remove('active');
+            addPatientForm.reset();
+
+            if (patientAgeInput) {
+              patientAgeInput.value = '';
+            }
+
+            alert('Existing patient linked successfully.');
+            goToPatientDashboard(linkedPatientAfterDuplicate);
+            return;
+          }
+        }
+
+        throw insertError;
+      }
+
+      await linkPatientToCurrentUser(id);
+
+      await renderPatientsFromSupabase();
+
+      addPatientModal.classList.remove('active');
+      addPatientForm.reset();
+
+      if (patientAgeInput) {
+        patientAgeInput.value = '';
+      }
+
+      alert('Patient added successfully.');
+      goToPatientDashboard(newPatient);
+    } catch (error) {
+      console.error(error);
+      alert(error.message || 'Something went wrong while saving the patient.');
+    }
   });
 }
 
