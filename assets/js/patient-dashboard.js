@@ -146,6 +146,16 @@ async function loadCurrentAuthUser() {
   if (!user) {
     throw new Error('No active user session found. Please sign in again.');
   }
+  currentAuthUser = user;
+}
+
+async function ensureCurrentAuthUser() {
+  if (currentAuthUser) {
+    return currentAuthUser;
+  }
+
+  await loadCurrentAuthUser();
+  return currentAuthUser;
 }
 
 function getStoredPatients() {
@@ -976,17 +986,21 @@ if (cancelDeletePatientModal && deletePatientModal) {
 
 if (confirmDeletePatientModal && deletePatientModal) {
   confirmDeletePatientModal.addEventListener('click', async () => {
-    if (!currentPatient || !currentAuthUser) {
+    const targetPatientId = currentPatient?.id || urlPatientId;
+
+    if (!targetPatientId) {
       alert('Unable to find patient record.');
       return;
     }
 
     try {
-      await removePatientFromCurrentUser(currentPatient.id);
+      await ensureCurrentAuthUser();
+
+      await removePatientFromCurrentUser(targetPatientId);
 
       const localPatients = getStoredPatients();
-      if (localPatients[currentPatient.id]) {
-        delete localPatients[currentPatient.id];
+      if (localPatients[targetPatientId]) {
+        delete localPatients[targetPatientId];
         saveStoredPatients(localPatients);
       }
 
